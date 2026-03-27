@@ -1,0 +1,157 @@
+:root {
+  --color-bg: #1a1a2e;
+  --color-surface: #16213e;
+  --color-surface-alt: #0f3460;
+  --color-text: #e0e0e0;
+  --color-text-muted: #8888a0;
+  --color-text-disabled: #5a5a7a;
+  --color-border: #2a2a4a;
+  --color-accent: #5b8bf5;
+  --color-untranslated: #4a3520;
+  --color-translated: #3a3a1e;
+  --color-confirmed: #1e3a1e;
+  --color-confirmed-text: #4a9a4a;
+  --color-structural: #1e1e32;
+  --color-structural-text: #6e6e8e;
+  --color-warning: #e8a840;
+  --color-danger: #e06060;
+  --color-danger-light: #ff6666;
+  --color-error-bg: #5a1a1a;
+  --color-error-text: #ff8888;
+  --color-error-border: #7a2a2a;
+  --color-find-match: #4a3a10;
+  --color-find-current: #5a4a10;
+  --color-translated-progress: #a08030;
+  --color-notes: #7080a0;
+  --color-input-bg: #1e2a4a;
+  --color-placeholder: #9090a8;
+  --color-scrollbar-thumb: #4a4a6a;
+  --shadow-dropdown: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-dialog: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  font-size: 14px;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  user-select: none;
+}
+
+button {
+  padding: 6px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+
+  &:hover:not(:disabled) {
+    background: var(--color-surface-alt);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+input, textarea {
+  user-select: text;
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-family: inherit;
+  font-size: inherit;
+
+  &::placeholder {
+    color: var(--color-placeholder);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar-thumb);
+  border-radius: 6px;
+
+  &:hover {
+    background: var(--color-text-muted);
+  }
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--color-bg);
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.15);
+    background: var(--color-accent);
+  }
+}
+
+.btn-danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.15);
+    background: var(--color-danger);
+  }
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  transition: color 0.15s;
+
+  &:hover {
+    color: var(--color-text);
+  }
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

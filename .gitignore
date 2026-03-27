@@ -1,0 +1,13 @@
+# rust build artifacts
+/src-tauri/target/
+/tools/target/
+
+# tauri auto-generated
+/src-tauri/gen/
+
+# frontend build artifacts
+/dist/
+/node_modules/
+
+# generated dictionary databases
+/resources/gen/

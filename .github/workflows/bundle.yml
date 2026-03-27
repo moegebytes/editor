@@ -1,0 +1,87 @@
+name: Tauri Bundle
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            bundles: appimage
+            artifact: x86_64-appimage
+            glob: "*.AppImage"
+          - os: windows-2022
+            bundles: nsis
+            artifact: x86_64-nsis
+            glob: "*.exe"
+          - os: macos-15
+            bundles: dmg
+            artifact: arm64-dmg
+            glob: "*.dmg"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          lfs: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+
+      - name: Cache dictionaries
+        id: dict-cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        with:
+          path: resources/gen
+          key: dictionaries-${{ hashFiles('resources/JMdict_e.xml', 'resources/kanjidic2.xml', 'tools/build-dictionary/**') }}
+
+      - name: Build dictionaries
+        if: steps.dict-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p resources/gen
+          cd tools && cargo run --release -p build-dictionary -- \
+            ../resources/JMdict_e.xml ../resources/kanjidic2.xml ../resources/gen/
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Set up PNPM package manager
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+
+      - name: Set up NodeJS
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Build Tauri bundle
+        run: pnpm tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: bundle-${{ matrix.artifact }}-${{github.sha}}
+          path: src-tauri/target/release/bundle/${{ matrix.bundles }}/${{ matrix.glob }}

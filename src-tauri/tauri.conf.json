@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-utils/schema.json",
+  "productName": "Yona",
+  "identifier": "com.moegebytes.yona",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "resources": {
+      "../resources/gen/jmdict.sqlite": "resources/jmdict.sqlite",
+      "../resources/gen/kanjidic2.sqlite": "resources/kanjidic2.sqlite",
+      "../resources/ipadic-mecab-v270.dict": "resources/ipadic-mecab-v270.dict"
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Yona",
+        "width": 1200,
+        "height": 800
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' asset: https://asset.localhost",
+        "connect-src": "ipc: http://ipc.localhost"
+      }
+    }
+  }
+}
