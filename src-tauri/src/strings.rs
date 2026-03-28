@@ -6,13 +6,13 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum StringsError {
-  #[error("{}", friendly_io_err("failed to read", path, source))]
+  #[error("{}", crate::util::friendly_io_msg("", path, source))]
   Io {
     path: PathBuf,
     source: std::io::Error,
   },
 
-  #[error("{}", friendly_io_err("cannot resolve path", path, source))]
+  #[error("{}", crate::util::friendly_io_msg("", path, source))]
   ResolvePath {
     path: PathBuf,
     source: std::io::Error,
@@ -25,14 +25,6 @@ pub enum StringsError {
   },
 }
 
-fn friendly_io_err(prefix: &str, path: &PathBuf, e: &std::io::Error) -> String {
-  let p = path.display();
-  match e.kind() {
-    std::io::ErrorKind::NotFound => format!("{}: File \"{}\" not found.", prefix, p),
-    std::io::ErrorKind::PermissionDenied => format!("{}: Permission denied for \"{}\".", prefix, p),
-    _ => format!("{}: Could not access \"{}\": {}.", prefix, p, e.kind()),
-  }
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StringsEntry {

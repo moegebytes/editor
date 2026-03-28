@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { FlatEntry, ProjectSettings } from "./lib/types";
+  import type { FlatEntry, ProjectFiles, ProjectSettings } from "./lib/types";
   import { isText, isUntranslated, isTranslated } from "./lib/utils";
   import {
     confirmLine,
@@ -8,11 +8,11 @@
     exportProjectDialog,
     importProject,
     openProject,
-    renameProject,
-    saveEnFile,
+    updateProject,
+    saveTranslation,
     saveProject,
     unconfirmLine,
-    updateProjectSettings,
+    clearWiktionaryCache,
   } from "./lib/ipc";
   import Toolbar from "./components/Toolbar.svelte";
   import EditorTable from "./components/EditorTable.svelte";
@@ -25,10 +25,13 @@
   import GoToLineDialog from "./components/GoToLineDialog.svelte";
   import UnsavedChangesDialog from "./components/UnsavedChangesDialog.svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { XIcon } from "@lucide/svelte";
+  import { toast } from "./lib/toast.svelte";
+  import ToastContainer from "./components/ui/ToastContainer.svelte";
 
   // Project state
+  let projectId: string | null = $state(null);
   let projectName: string | null = $state(null);
+  let projectFiles: ProjectFiles = $state({ jp: "", en: "" });
   let confirmedLines: Set<number> = $state(new Set());
   let projectSettings: ProjectSettings = $state({ autoConfirmOnEnter: false });
   let settingsVisible = $state(false);
@@ -39,7 +42,6 @@
   let modified = $state(false);
   let loading = $state(false);
   let saving = $state(false);
-  let error: string | null = $state(null);
   let selectedIndex = $state(-1);
 
   // Dictionary state
@@ -93,7 +95,9 @@
   let hasProject = $derived(projectName !== null);
 
   function applyProject(proj: import("./lib/types").Project) {
+    projectId = proj.id;
     projectName = proj.name;
+    projectFiles = proj.files;
     confirmedLines = new Set(proj.confirmedLines);
     projectSettings = proj.settings;
     entries = proj.entries;
@@ -102,11 +106,10 @@
 
   async function handleNewProject(name: string, jp: string, en: string) {
     try {
-      error = null;
       loading = true;
       applyProject(await createProject(name, { jp, en }));
     } catch (e) {
-      error = `Failed to create project: ${e}`;
+      toast.error(`Failed to create project: ${e}`);
     } finally {
       loading = false;
     }
@@ -114,11 +117,10 @@
 
   async function handleImportProject(sourcePath: string, name: string, jp: string, en: string) {
     try {
-      error = null;
       loading = true;
       applyProject(await importProject(sourcePath, name, { jp, en }));
     } catch (e) {
-      error = `Failed to import project: ${e}`;
+      toast.error(`Failed to import project: ${e}`);
     } finally {
       loading = false;
     }
@@ -126,43 +128,37 @@
 
   async function handleOpenProject(id: string) {
     try {
-      error = null;
       loading = true;
       applyProject(await openProject(id));
     } catch (e) {
-      error = `Failed to open project: ${e}`;
+      toast.error(`Failed to open project: ${e}`);
     } finally {
       loading = false;
     }
   }
 
-  async function handleRename(name: string) {
+  async function handleUpdateProject(name: string, settings: ProjectSettings) {
+    if (!projectId) return;
     try {
-      await renameProject(name);
+      await updateProject(projectId, name, projectFiles, settings);
       projectName = name;
+      projectSettings = settings;
+      toast.success("Settings saved");
     } catch (e) {
-      error = `Failed to rename project: ${e}`;
-    }
-  }
-
-  async function handleSaveSettings(settings: ProjectSettings) {
-    try {
-      await updateProjectSettings(settings);
-    } catch (e) {
-      error = `Failed to save settings: ${e}`;
+      toast.error(`Failed to save settings: ${e}`);
     }
   }
 
   async function handleSave() {
     if (!hasProject) return;
     try {
-      error = null;
       saving = true;
-      await saveEnFile(entries);
+      await saveTranslation(entries);
       await saveProject();
       modified = false;
+      toast.success("Project saved");
     } catch (e) {
-      error = `Failed to save: ${e}`;
+      toast.error(`Failed to save: ${e}`);
     } finally {
       saving = false;
     }
@@ -172,10 +168,10 @@
     const path = await exportProjectDialog();
     if (!path) return;
     try {
-      error = null;
       await exportProject(path);
+      toast.success("Project exported");
     } catch (e) {
-      error = `Failed to export: ${e}`;
+      toast.error(`Failed to export: ${e}`);
     }
   }
 
@@ -241,7 +237,9 @@
   }
 
   function doCloseProject() {
+    projectId = null;
     projectName = null;
+    projectFiles = { jp: "", en: "" };
     entries = [];
     confirmedLines = new Set();
     projectSettings = { autoConfirmOnEnter: false };
@@ -381,15 +379,6 @@
 <svelte:window onkeydowncapture={handleKeydownGlobal} />
 
 <div class="app">
-  {#if error}
-    <div class="error-bar">
-      <span>{error}</span>
-      <button class="error-dismiss btn-icon" onclick={() => (error = null)}>
-        <XIcon size={14} />
-      </button>
-    </div>
-  {/if}
-
   {#if !hasProject}
     <ProjectHome
       onNewProject={handleNewProject}
@@ -400,10 +389,10 @@
   {:else if settingsVisible}
     <SettingsView
       projectName={projectName ?? ""}
+      files={projectFiles}
       bind:settings={projectSettings}
       onBack={() => (settingsVisible = false)}
-      onRename={handleRename}
-      onSaveSettings={handleSaveSettings}
+      onSave={handleUpdateProject}
     />
   {:else}
     <Toolbar
@@ -418,6 +407,14 @@
       onConfirmToggle={confirmToggleCurrent}
       onGoToLine={() => (goToLineVisible = true)}
       onOpenSettings={() => (settingsVisible = true)}
+      onClearCaches={async () => {
+        try {
+          await clearWiktionaryCache();
+          toast.success("Caches cleared");
+        } catch (e) {
+          toast.error(`${e}`);
+        }
+      }}
       {projectName}
       saveDisabled={!modified}
       bind:filterText
@@ -467,6 +464,7 @@
 </div>
 
 <ContextMenu />
+<ToastContainer />
 
 <GoToLineDialog
   bind:visible={goToLineVisible}
@@ -485,29 +483,6 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-  }
-
-  .error-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px;
-    background: var(--color-error-bg);
-    color: var(--color-error-text);
-    font-size: 13px;
-    border-bottom: 1px solid var(--color-error-border);
-
-    .error-dismiss {
-      color: var(--color-error-text);
-      font-size: 15px;
-      padding: 0 4px;
-      opacity: 0.7;
-
-      &:hover {
-        opacity: 1;
-        color: var(--color-error-text);
-      }
-    }
   }
 
   .main-area {

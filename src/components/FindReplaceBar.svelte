@@ -71,7 +71,7 @@
   <div class="find-replace-bar">
     <input
       type="text"
-      placeholder="Find in EN..."
+      placeholder="Find..."
       bind:value={findText}
       bind:this={findInput}
       oninput={handleFindInput}

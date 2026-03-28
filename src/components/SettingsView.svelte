@@ -1,19 +1,19 @@
 <script lang="ts">
-  import type { ProjectSettings } from "../lib/types";
+  import type { ProjectFiles, ProjectSettings } from "../lib/types";
   import { ArrowLeftIcon, SaveIcon } from "@lucide/svelte";
 
   let {
     projectName,
+    files,
     settings = $bindable({ autoConfirmOnEnter: false }),
     onBack,
-    onRename,
-    onSaveSettings,
+    onSave,
   }: {
     projectName: string;
+    files: ProjectFiles;
     settings?: ProjectSettings;
     onBack: () => void;
-    onRename: (name: string) => void;
-    onSaveSettings: (settings: ProjectSettings) => void;
+    onSave: (name: string, settings: ProjectSettings) => void;
   } = $props();
 
   let nameInput = $state("");
@@ -30,13 +30,10 @@
   );
 
   function save() {
-    const trimmedName = nameInput.trim();
-    if (trimmedName && trimmedName !== projectName) {
-      onRename(trimmedName);
-    }
-    if (draft.autoConfirmOnEnter !== settings.autoConfirmOnEnter) {
+    const trimmedName = nameInput.trim() || projectName;
+    if (hasChanges) {
       settings = { ...draft };
-      onSaveSettings(draft);
+      onSave(trimmedName, draft);
     }
   }
 </script>
@@ -80,6 +77,17 @@
           <label class="field-label" for="project-name">Project Name</label>
           <input id="project-name" type="text" bind:value={nameInput} class="field-input" />
         </div>
+        <div class="field-row">
+          <span class="field-label">Japanese File</span>
+          <span class="field-path text-ellipsis" title={files.jp}>{files.jp}</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">English File</span>
+          <span class="field-path text-ellipsis" title={files.en}>{files.en}</span>
+        </div>
+        <p class="field-hint">
+          To change file paths, close the project and edit it from the home screen.
+        </p>
       {:else}
         <label class="check-row">
           <input type="checkbox" bind:checked={draft.autoConfirmOnEnter} />
@@ -221,6 +229,26 @@
     flex: 1;
     padding: 6px 10px;
     max-width: 320px;
+  }
+
+  .field-path {
+    flex: 1;
+    padding: 6px 10px;
+    max-width: 480px;
+    font-size: 13px;
+    color: var(--color-text-muted);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    direction: rtl;
+    text-align: left;
+  }
+
+  .field-hint {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin-top: 8px;
+    line-height: 1.4;
   }
 
   .check-row {

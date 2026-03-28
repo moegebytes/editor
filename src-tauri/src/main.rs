@@ -1,13 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
-pub mod core;
-pub mod dictionary;
+mod core;
+mod dictionary;
+mod logging;
 mod project;
-pub mod strings;
+mod strings;
+mod util;
+mod wiktionary;
 
 use std::sync::Mutex;
 
+use log::{error, info, warn};
 use tauri::Manager;
 
 const RES_JMDICT: &str = "resources/jmdict.sqlite";
@@ -23,11 +27,13 @@ fn main() {
       }
     }))
     .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_window_state::Builder::new().build())
     .manage(commands::DictState(Mutex::new(None)))
     .manage(commands::ProjectState(Mutex::new(None)))
+    .manage(commands::WiktState(Mutex::new(None)))
     .invoke_handler(tauri::generate_handler![
-      commands::save_en_file,
+      commands::save_translation,
       commands::lookup_word,
       commands::lookup_kanji,
       commands::create_project,
@@ -40,12 +46,19 @@ fn main() {
       commands::remove_recent_project,
       commands::delete_project,
       commands::export_project,
-      commands::rename_project,
+      commands::get_project_info,
+      commands::update_project,
       commands::preview_import,
       commands::import_project,
-      commands::update_project_settings,
+      commands::open_app_dir,
+      commands::lookup_wiktionary,
+      commands::clear_wiktionary_cache,
     ])
     .setup(|app| {
+      let config_dir = app.path().app_config_dir()?;
+      logging::init(&config_dir);
+      info!("Starting...");
+
       let resource_dir = app.path().resource_dir()?;
       let jmdict_path = resource_dir.join(RES_JMDICT);
       let kanjidic_path = resource_dir.join(RES_KANJIDIC);
@@ -56,14 +69,26 @@ fn main() {
           Ok(db) => {
             let state = app.state::<commands::DictState>();
             *state.0.lock().unwrap() = Some(db);
-            eprintln!("Dictionary loaded from bundled resources");
+            info!("Dictionary loaded from bundled resources");
           }
           Err(e) => {
-            eprintln!("Failed to load dictionary: {}", e);
+            error!("Failed to load dictionary: {}", e);
           }
         }
       } else {
-        eprintln!("Dictionary files not found at {:?}, {:?}", jmdict_path, kanjidic_path);
+        warn!("Dictionary files not found at {:?}, {:?}", jmdict_path, kanjidic_path);
+      }
+
+      let cache_dir = app.path().app_cache_dir()?;
+      match wiktionary::WiktCache::open(&cache_dir) {
+        Ok(cache) => {
+          let state = app.state::<commands::WiktState>();
+          *state.0.lock().unwrap() = Some(cache);
+          info!("Wiktionary cache initialized");
+        }
+        Err(e) => {
+          error!("Failed to initialize Wiktionary cache: {}", e);
+        }
       }
 
       Ok(())

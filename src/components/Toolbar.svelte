@@ -13,6 +13,7 @@
     onConfirmToggle,
     onGoToLine,
     onOpenSettings,
+    onClearCaches,
     projectName,
     saveDisabled,
     filterText = $bindable(""),
@@ -27,6 +28,7 @@
     onConfirmToggle: () => void;
     onGoToLine: () => void;
     onOpenSettings: () => void;
+    onClearCaches: () => void;
     projectName: string | null;
     saveDisabled: boolean;
     filterText?: string;
@@ -68,6 +70,10 @@
     { label: "Go to Line", action: onGoToLine, shortcut: "Ctrl+G" },
     { label: "Open Dictionary", action: onOpenDict, shortcut: "Ctrl+D" },
     { label: "Find & Replace", action: onToggleFindReplace, shortcut: "Ctrl+H" },
+  ]);
+
+  let helpItems: MenuEntry[] = $derived([
+    { label: "Clear Caches", action: onClearCaches },
   ]);
 </script>
 
@@ -115,6 +121,20 @@
       {#if openMenu === "tools"}
         <div class="menu-pos">
           <DropdownMenu items={toolsItems} onClose={closeMenu} />
+        </div>
+      {/if}
+    </div>
+
+    <div class="menu-container">
+      <button
+        class:btn-active={openMenu === "help"}
+        onclick={() => toggleMenu("help")}
+      >
+        Help
+      </button>
+      {#if openMenu === "help"}
+        <div class="menu-pos">
+          <DropdownMenu items={helpItems} onClose={closeMenu} />
         </div>
       {/if}
     </div>

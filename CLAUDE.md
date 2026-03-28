@@ -4,13 +4,14 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Project Overview
 
-Desktop app for translating Visual Novel script files. Reads paired JP/EN script files in a custom strings text format, displays side-by-side, supports inline editing of English translations with offline Japanese dictionary lookup.
+Desktop app for translating Visual Novel script files. Reads paired JP/EN script files in a custom strings text format, displays side-by-side, supports inline editing of English translations with offline Japanese dictionary lookup and optional online Wiktionary lookup.
 
 ## Tech Stack
 
 - **Rust + Tauri 2** backend, **Svelte 5 + TypeScript** frontend.
 - **vibrato** (pure Rust, IPADIC MeCab 2.7.0) for Japanese morphological analysis.
-- **JMdict + KANJIDIC2** via SQLite (FTS5) for offline dictionary lookup. `rusqlite` with `bundled` feature.
+- **JMdict + KANJIDIC2** via SQLite (FTS5) for offline dictionary lookup using `rusqlite` with `bundled` feature.
+- **Wiktionary** online lookup via Wikimedia REST `/page/definition/` API (`reqwest`, blocking, native-tls);  cached in SQLite.
 
 ## Project Structure
 
@@ -22,6 +23,9 @@ editor/
 ├── vite.config.ts
 ├── svelte.config.js
 ├── tsconfig.json
+├── public/
+│   └── fonts/                   -- Bundled fonts
+│       └── NotoSansJP-Variable.woff2
 ├── src/                         -- Svelte 5 + TypeScript frontend
 │   ├── App.svelte
 │   ├── main.ts
@@ -29,13 +33,16 @@ editor/
 │   ├── lib/
 │   │   ├── types.ts             -- Types for IPC
 │   │   ├── ipc.ts               -- Tauri invoke wrappers
-│   │   └── utils.ts             -- Shared utilities (entry predicates, set helpers, kanji detection)
+│   │   ├── utils.ts             -- Shared utilities (entry predicates, set helpers, kanji detection)
+│   │   └── toast.svelte.ts      -- Toast notification store (Svelte 5 runes module)
 │   └── components/
 │       ├── ui/
 │       │   ├── ContextMenu.svelte
 │       │   ├── Dialog.svelte
 │       │   ├── DropdownMenu.svelte
-│       │   └── LoadingOverlay.svelte
+│       │   ├── LoadingOverlay.svelte
+│       │   └── ToastContainer.svelte
+│       ├── DictTab.svelte
 │       ├── DictionaryPanel.svelte
 │       ├── EditorTable.svelte
 │       ├── FindReplaceBar.svelte
@@ -44,6 +51,7 @@ editor/
 │       ├── SettingsView.svelte
 │       ├── StatusBar.svelte
 │       ├── Toolbar.svelte
+│       ├── WiktTab.svelte
 │       └── UnsavedChangesDialog.svelte
 ├── src-tauri/                   -- Tauri 2 backend
 │   ├── Cargo.toml
@@ -52,10 +60,13 @@ editor/
 │   └── src/
 │       ├── main.rs              -- Tauri app setup, dictionary loading
 │       ├── commands.rs          -- IPC command handlers
+│       ├── logging.rs           -- Per-session file logger setup
 │       ├── project.rs           -- Project config persistence
 │       ├── strings.rs           -- Strings format parser/writer
 │       ├── core.rs              -- File pairing, FlatEntry type, notes, reconstruction
-│       └── dictionary.rs        -- JMdict/KANJIDIC2 SQLite queries + Vibrato tokenizer
+│       ├── dictionary.rs        -- JMdict/KANJIDIC2 SQLite queries + Vibrato tokenizer
+│       ├── util.rs              -- Shared utilities (friendly IO error messages)
+│       └── wiktionary.rs        -- Wiktionary REST API client + SQLite cache
 ├── tools/
 │   ├── Cargo.toml
 │   └── build-dictionary/        -- Offline tool: JMdict XML + KANJIDIC2 XML -> SQLite
@@ -92,11 +103,11 @@ editor/
 
 **Project workflow:** Starts at Project Home (recent + all projects, new project). Projects stored as `{uuid}.json` in `~/.config/com.moegebytes.yona/projects/`. `recent.json` stores UUIDs only.
 
-**Table:** Rows matched by position (JP line N <-> EN line N). Virtualized (`@tanstack/svelte-virtual`). Three-state: amber (untranslated), yellow (translated), green (confirmed). Double-click row number to confirm/unconfirm. Includes have collapse/expand. Emit/blank rows hidden. Notes indicator: `+` to add, `[N]` when present.
+**Table:** Rows matched by position. Virtualized (`@tanstack/svelte-virtual`). Three-state: amber (untranslated), yellow (translated), green (confirmed). Double-click row number to confirm/unconfirm. Includes have collapse/expand. Emit/blank rows hidden. Notes indicator: `+` to add, `[N]` when present.
 
-**Toolbar menus:** Project (Save/Export/Settings/Close), Line (Next Untranslated/Unconfirmed, Confirm/Unconfirm), Tools (Dictionary), Filter input (CTRL+F) right-aligned).
+**Toolbar menus:** Project (Save/Export/Settings/Close), Line (Next Untranslated/Unconfirmed, Confirm/Unconfirm), Tools (Dictionary), Help (Clear Caches). Filter input (CTRL+F) right-aligned.
 
-**Dictionary panel:** Vibrato tokenizes JP text, looks up tokens. Inflection detection with base form navigation. Kanji detail via KANJIDIC2. Manual search box.
+**Dictionary panel:** Two tabs: **Dictionary** (offline JMdict/KANJIDIC2) and **Wiktionary** (online, manual trigger). Shared search input with search button. Dictionary tab: Vibrato tokenizes JP text, looks up tokens, inflection detection with base form navigation, kanji detail via KANJIDIC2. External query changes auto-search dictionary and reset to Dictionary tab. Wiktionary tab: manual lookup via Enter or search button, structured JSON results grouped by language (Japanese auto-expanded) then part of speech, cached indicator in tab label.
 
 **Find & Replace (Ctrl+H):** Searches EN text in filtered entries. Real-time match count, navigate Enter/Shift+Enter, replace current or all.
 
@@ -110,12 +121,18 @@ editor/
 # Project management
 create_project(name, files: {jp, en}) -> ProjectWithEntries
 open_project(id) -> ProjectWithEntries
-save_project() / save_en_file(entries)
-confirm_line(index) / unconfirm_line(index)
-rename_project(name) / delete_project(id)
-list_recent_projects() / list_all_projects() -> Vec<RecentProject>
-remove_recent_project(id)
-export_project(dest_path) / update_project_settings(settings)
+save_project() -> ()
+save_translation(entries) -> ()
+confirm_line(index) -> ()
+unconfirm_line(index) -> ()
+get_project_info(id) -> ProjectInfo { name, files, settings }
+update_project(id, name, files, settings) -> ()
+delete_project(id) -> ()
+list_recent_projects() -> Vec<RecentProject>
+list_all_projects() -> Vec<RecentProject>
+remove_recent_project(id) -> ()
+export_project(dest_path) -> ()
+open_app_dir() -> ()
 
 # Import
 preview_import(source_path) -> ImportPreview { name, confirmedCount }
@@ -124,9 +141,13 @@ import_project(source_path, name, files: {jp, en}) -> ProjectWithEntries
 # Dictionary
 lookup_word(query) -> LookupResult { entries, inflections }
 lookup_kanji(ch) -> Option<KanjiEntry>
+
+# Wiktionary
+lookup_wiktionary(term) -> WiktResult { term, sections, cached }
+clear_wiktionary_cache() -> ()
 ```
 
-**ProjectWithEntries:** Project fields (name, files, confirmedLines, settings) via `#[serde(flatten)]` + `entries: Vec<FlatEntry>`.
+**ProjectWithEntries:** `id` + Project fields (name, files, confirmedLines, settings) via `#[serde(flatten)]` + `entries: Vec<FlatEntry>`.
 
 **FlatEntry** (`#[serde(rename_all = "camelCase")]`): `index`, `entry_type` (Text/Comment/Include/Emit/Blank), `jp_text`, `en_text`, `source_file`, `depth` (0 = top level), `notes: Vec<String>` (without `;` prefix).
 
@@ -150,13 +171,9 @@ cd src-tauri && cargo test
 pnpm tauri build
 ```
 
-- Dictionaries + IPADIC bundled as Tauri resources. DevTools only in debug builds.
+- Dictionaries + IPADIC bundled as Tauri resources. Fonts in `public/fonts/`. Wiktionary cache in `{APP_CACHE_DIR}/wiktionary.sqlite`. DevTools only in debug builds.
 - Single-instance via `tauri-plugin-single-instance`. Linux needs WebKitGTK.
-
-## Future
-
-- Font bundling (Noto Sans JP) for consistent CJK rendering.
-- Wikidata lookup for proper nouns (optional, requires network).
+- Per-session log files in `{APP_CONFIG_DIR}/logs/`, max 5 retained.
 
 ## Coding Conventions
 

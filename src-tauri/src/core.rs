@@ -33,11 +33,7 @@ struct FlatRow {
   notes: Vec<String>,
 }
 
-fn flatten_entries(
-  entries: &[StringsEntry],
-  source_file: Option<&str>,
-  depth: u32,
-) -> Vec<FlatRow> {
+fn flatten_entries(entries: &[StringsEntry], source_file: Option<&str>, depth: u32) -> Vec<FlatRow> {
   let mut rows = Vec::new();
 
   for entry in entries {
@@ -146,8 +142,8 @@ pub fn pair_files(jp_entries: &[StringsEntry], en_entries: &[StringsEntry]) -> V
   let mut jp_rows = flatten_entries(jp_entries, None, 0);
   let mut en_rows = flatten_entries(en_entries, None, 0);
 
-  // Absorb comments into following text rows _before_ pairing
-  // so that added/removed notes don't shift positional alignment
+  // Absorb comments into following text rows _before_ pairing so that added/removed notes don't
+  // shift positional alignment
   absorb_notes_in_rows(&mut jp_rows);
   absorb_notes_in_rows(&mut en_rows);
 
@@ -192,27 +188,8 @@ pub fn pair_files(jp_entries: &[StringsEntry], en_entries: &[StringsEntry]) -> V
   result
 }
 
-pub fn flatten_single(entries: &[StringsEntry]) -> Vec<FlatEntry> {
-  let mut rows = flatten_entries(entries, None, 0);
-  absorb_notes_in_rows(&mut rows);
-
-  rows
-    .into_iter()
-    .enumerate()
-    .map(|(i, r)| FlatEntry {
-      index: i,
-      entry_type: r.entry_type,
-      jp_text: r.text.clone(),
-      en_text: None,
-      source_file: r.source_file,
-      depth: r.depth,
-      notes: r.notes,
-    })
-    .collect()
-}
-
-pub fn reconstruct_en_entries(flat: &[FlatEntry]) -> Vec<StringsEntry> {
-  reconstruct_en_at_depth(flat, 0)
+pub fn reconstruct_entries(flat: &[FlatEntry]) -> Vec<StringsEntry> {
+  reconstruct_at_depth(flat, 0)
 }
 
 fn en_text(entry: &FlatEntry) -> String {
@@ -229,7 +206,7 @@ fn emit_notes(result: &mut Vec<StringsEntry>, entry: &FlatEntry) {
   }
 }
 
-fn reconstruct_en_at_depth(flat: &[FlatEntry], base_depth: u32) -> Vec<StringsEntry> {
+fn reconstruct_at_depth(flat: &[FlatEntry], base_depth: u32) -> Vec<StringsEntry> {
   let mut result = Vec::new();
   let mut i = 0;
 
@@ -256,7 +233,7 @@ fn reconstruct_en_at_depth(flat: &[FlatEntry], base_depth: u32) -> Vec<StringsEn
         while sub_end < flat.len() && flat[sub_end].depth >= target_depth {
           sub_end += 1;
         }
-        let sub_entries = reconstruct_en_at_depth(&flat[sub_start..sub_end], target_depth);
+        let sub_entries = reconstruct_at_depth(&flat[sub_start..sub_end], target_depth);
         result.push(StringsEntry::Include {
           path: inc_path,
           entries: sub_entries,
@@ -378,7 +355,7 @@ mod tests {
     assert_eq!(paired[0].entry_type, EntryType::Text);
     assert_eq!(paired[0].notes, vec!["Note about choice"]);
 
-    let reconstructed = reconstruct_en_entries(&paired);
+    let reconstructed = reconstruct_entries(&paired);
     assert_eq!(reconstructed, en);
   }
 
@@ -393,7 +370,7 @@ mod tests {
 
     paired[0].notes = vec!["Editor note".to_string()];
 
-    let en_saved = reconstruct_en_entries(&paired);
+    let en_saved = reconstruct_entries(&paired);
     assert_eq!(en_saved.len(), 3); // comment + text + text
     assert_eq!(en_saved[0], StringsEntry::Comment("; Editor note".to_string()));
     assert_eq!(en_saved[1], StringsEntry::Text("Test".to_string()));
@@ -419,7 +396,7 @@ mod tests {
 
     paired[0].notes = vec!["New note".to_string(), "Another note".to_string()];
 
-    let reconstructed = reconstruct_en_entries(&paired);
+    let reconstructed = reconstruct_entries(&paired);
     assert_eq!(reconstructed.len(), 3);
     assert_eq!(reconstructed[0],StringsEntry::Comment("; New note".to_string()));
     assert_eq!(reconstructed[1], StringsEntry::Comment("; Another note".to_string()));
@@ -474,7 +451,7 @@ mod tests {
       text("下"),
     ];
     let paired = pair_files(&jp, &en);
-    let reconstructed = reconstruct_en_entries(&paired);
+    let reconstructed = reconstruct_entries(&paired);
     assert_eq!(reconstructed, en);
   }
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { RecentProject } from "../lib/types";
   import { getVersion } from "@tauri-apps/api/app";
-  import { XIcon, Trash2Icon, TriangleAlertIcon } from "@lucide/svelte";
+  import { XIcon, Trash2Icon, TriangleAlertIcon, SettingsIcon, FolderOpenIcon } from "@lucide/svelte";
   import {
     listRecentProjects,
     listAllProjects,
@@ -10,9 +10,13 @@
     openFileDialog,
     importProjectDialog,
     previewImport,
+    getProjectInfo,
+    updateProject,
+    openAppDir,
   } from "../lib/ipc";
   import LoadingOverlay from "./ui/LoadingOverlay.svelte";
   import Dialog from "./ui/Dialog.svelte";
+  import { toast } from "../lib/toast.svelte";
 
   let {onNewProject, onImportProject, onOpenProject, loading = false}: {
     onNewProject: (name: string, jpPath: string, enPath: string) => void;
@@ -26,6 +30,7 @@
   let showNewForm = $state(false);
   let importSourcePath = $state("");
   let deleteTarget: RecentProject | null = $state(null);
+  let editTarget: RecentProject | null = $state(null);
   let newName = $state("");
   let newJpPath = $state("");
   let newEnPath = $state("");
@@ -33,6 +38,7 @@
   let appVersion = $state("");
 
   let isImport = $derived(importSourcePath !== "");
+  let isEdit = $derived(editTarget !== null);
 
   getVersion().then((v) => (appVersion = v));
 
@@ -46,12 +52,12 @@
   });
 
   async function handlePickJp() {
-    const path = await openFileDialog();
+    const path = await openFileDialog(newJpPath || undefined);
     if (path) newJpPath = path;
   }
 
   async function handlePickEn() {
-    const path = await openFileDialog();
+    const path = await openFileDialog(newEnPath || undefined);
     if (path) newEnPath = path;
   }
 
@@ -74,6 +80,73 @@
     } else {
       onNewProject(newName.trim(), newJpPath, newEnPath);
     }
+  }
+
+  async function handleEditProject(e: MouseEvent, proj: RecentProject) {
+    e.stopPropagation();
+    try {
+      const info = await getProjectInfo(proj.id);
+      editTarget = proj;
+      newName = info.name;
+      newJpPath = info.files.jp;
+      newEnPath = info.files.en;
+      formError = "";
+      importSourcePath = "";
+      showNewForm = true;
+    } catch (err) {
+      formError = `${err}`;
+      showNewForm = true;
+    }
+  }
+
+  async function handleSaveEdit() {
+    formError = "";
+    if (!editTarget) return;
+    if (!newName.trim()) {
+      formError = "Project name is required";
+      return;
+    }
+    if (!newJpPath) {
+      formError = "Japanese file is required";
+      return;
+    }
+    if (!newEnPath) {
+      formError = "English file is required";
+      return;
+    }
+    try {
+      const info = await getProjectInfo(editTarget.id);
+      await updateProject(
+        editTarget.id,
+        newName.trim(),
+        { jp: newJpPath, en: newEnPath },
+        info.settings,
+      );
+      closeForm();
+      refreshLists();
+      toast.success("Project updated");
+    } catch (err) {
+      formError = `${err}`;
+    }
+  }
+
+  function resetForm() {
+    newName = "";
+    newJpPath = "";
+    newEnPath = "";
+    formError = "";
+    importSourcePath = "";
+    editTarget = null;
+  }
+
+  function closeForm() {
+    showNewForm = false;
+    resetForm();
+  }
+
+  function showNew() {
+    resetForm();
+    showNewForm = true;
   }
 
   async function handleImport() {
@@ -126,6 +199,13 @@
               </button>
               <button
                 class="btn-icon item-action"
+                title="Edit project"
+                onclick={(e) => handleEditProject(e, proj)}
+              >
+                <SettingsIcon size={14} />
+              </button>
+              <button
+                class="btn-icon item-action"
                 title="Remove from recent"
                 onclick={(e) => handleRemoveRecent(e, proj.id)}
               >
@@ -156,6 +236,13 @@
                 {proj.name}
               </button>
               <button
+                class="btn-icon item-action"
+                title="Edit project"
+                onclick={(e) => handleEditProject(e, proj)}
+              >
+                <SettingsIcon size={14} />
+              </button>
+              <button
                 class="btn-icon item-action delete-action"
                 title="Delete project"
                 onclick={(e) => handleDeleteProject(e, proj)}
@@ -174,7 +261,7 @@
   <div class="home-right">
     {#if !showNewForm}
       <div class="home-actions">
-        <button class="new-btn" onclick={() => { importSourcePath = ""; showNewForm = true; }}>
+        <button class="new-btn" onclick={showNew}>
           New Project
         </button>
         <button class="import-btn" onclick={handleImport}>
@@ -183,7 +270,7 @@
       </div>
     {:else}
       <div class="new-form">
-        <h2>{isImport ? "Import Project" : "New Project"}</h2>
+        <h2>{isEdit ? "Edit Project" : isImport ? "Import Project" : "New Project"}</h2>
         <div class="form-field">
           <label>Project Name</label>
           <input
@@ -214,15 +301,24 @@
           <div class="form-error">{formError}</div>
         {/if}
         <div class="form-actions">
-          <button class="btn-primary" onclick={handleCreate}>Create</button>
-          <button onclick={() => { showNewForm = false; importSourcePath = ""; }}>Cancel</button>
+          {#if isEdit}
+            <button class="btn-primary" onclick={handleSaveEdit}>Save</button>
+          {:else}
+            <button class="btn-primary" onclick={handleCreate}>Create</button>
+          {/if}
+          <button onclick={closeForm}>Cancel</button>
         </div>
       </div>
     {/if}
   </div>
 
   {#if appVersion}
-    <span class="version">v{appVersion}</span>
+    <span class="version">
+      v{appVersion}
+      <button class="btn-icon version-action" title="Open app directory" onclick={openAppDir}>
+        <FolderOpenIcon size={12} />
+      </button>
+    </span>
   {/if}
 </div>
 
@@ -253,8 +349,19 @@
     position: absolute;
     bottom: 8px;
     right: 12px;
-    font-size: 11px;
+    display: inline-flex;
+    gap: 6px;
+    font-size: 12px;
     color: var(--color-text-muted);
+  }
+
+  .version-action {
+    padding: 2px;
+    color: var(--color-text-muted);
+
+    &:hover {
+      color: var(--color-text);
+    }
   }
 
   .home-left {
@@ -437,14 +544,4 @@
     }
   }
 
-  .btn-danger {
-    background: var(--color-danger);
-    border-color: var(--color-danger);
-    color: #fff;
-
-    &:hover:not(:disabled) {
-      filter: brightness(1.15);
-      background: var(--color-danger);
-    }
-  }
 </style>

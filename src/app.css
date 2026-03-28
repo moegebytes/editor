@@ -1,9 +1,16 @@
+@font-face {
+  font-family: "Noto Sans JP";
+  src: url("/fonts/NotoSansJP-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
   --color-bg: #1a1a2e;
   --color-surface: #16213e;
   --color-surface-alt: #0f3460;
   --color-text: #e0e0e0;
-  --color-text-muted: #8888a0;
+  --color-text-muted: #9898b0;
   --color-text-disabled: #5a5a7a;
   --color-border: #2a2a4a;
   --color-accent: #5b8bf5;
@@ -19,6 +26,9 @@
   --color-error-bg: #5a1a1a;
   --color-error-text: #ff8888;
   --color-error-border: #7a2a2a;
+  --color-success-bg: #1a3a1a;
+  --color-success-text: #88cc88;
+  --color-success-border: #2a5a2a;
   --color-find-match: #4a3a10;
   --color-find-current: #5a4a10;
   --color-translated-progress: #a08030;

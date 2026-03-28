@@ -8,13 +8,13 @@ use vibrato::{Dictionary, Tokenizer};
 
 #[derive(Debug, Error)]
 pub enum DictError {
-  #[error("database error: {0}")]
+  #[error("Database error: {0}.")]
   Db(#[from] rusqlite::Error),
 
-  #[error("database not found: {path}")]
+  #[error("Database '{path}' not found.")]
   NotFound { path: String },
 
-  #[error("tokenizer error: {0}")]
+  #[error("Tokenizer error: {0}.")]
   Tokenizer(String),
 }
 
@@ -64,11 +64,7 @@ pub struct KanjiEntry {
   pub meanings: Vec<String>,
 }
 
-fn identify_inflection(
-  conj_form: &str,
-  aux_chain: &str,
-  is_adjective: bool,
-) -> Option<(String, String)> {
+fn identify_inflection(conj_form: &str, aux_chain: &str, is_adjective: bool) -> Option<(String, String)> {
   let kind = if is_adjective { "adjective" } else { "verb" };
 
   let (form, desc) = match aux_chain {
@@ -124,7 +120,7 @@ fn identify_inflection(
     "う" | "よう" =>
       ("Volitional", "Expresses intention or suggestion.".to_string()),
 
-    // No auxiliary — check conjugation form directly
+    // No auxiliary - check conjugation form directly
     "" => {
       if conj_form.starts_with("命令") {
         ("Imperative", format!("Command form of the {}.", kind))
@@ -133,7 +129,7 @@ fn identify_inflection(
       }
     }
 
-    // Unknown auxiliary chain — generic fallback
+    // Generic fallback
     _ => ("Inflected form", format!("An inflected form of the {}.", kind)),
   };
 
@@ -147,11 +143,7 @@ pub struct DictDb {
 }
 
 impl DictDb {
-  pub fn open(
-    jmdict_path: &Path,
-    kanjidic_path: &Path,
-    ipadic_path: &Path,
-  ) -> Result<Self, DictError> {
+  pub fn open(jmdict_path: &Path, kanjidic_path: &Path, ipadic_path: &Path) -> Result<Self, DictError> {
     for path in [jmdict_path, kanjidic_path, ipadic_path] {
       if !path.exists() {
         return Err(DictError::NotFound {
@@ -166,8 +158,7 @@ impl DictDb {
     let dict_file = std::fs::File::open(ipadic_path)
       .map_err(|e| DictError::Tokenizer(format!("failed to open IPADIC: {}", e)))?;
     let reader = std::io::BufReader::new(dict_file);
-    let dict = Dictionary::read(reader)
-      .map_err(|e| DictError::Tokenizer(format!("dictionary load error: {}", e)))?;
+    let dict = Dictionary::read(reader).map_err(|e| DictError::Tokenizer(format!("dictionary load error: {}", e)))?;
     let tokenizer = Tokenizer::new(dict);
 
     Ok(DictDb {
@@ -214,7 +205,7 @@ impl DictDb {
         }
       }
 
-      // Look up the base/dictionary form if available (field index 6 in IPADIC)
+      // Look up the base/dictionary form if available (field index 6 in ipadic)
       let lookup_form = if fields.len() > 6 && fields[6] != "*" {
         fields[6]
       } else {
@@ -239,7 +230,7 @@ impl DictDb {
       }
     }
 
-    // If tokenization yielded nothing, fall back to FTS5
+    // If tokenization yielded nothing, fall back to fts5
     if entries.is_empty() {
       entries = self.lookup_fts(trimmed)?;
     }
@@ -306,10 +297,7 @@ impl DictDb {
     let is_adjective = content.pos == "形容詞";
 
     // Collect auxiliary/particle surfaces after the content word
-    let aux_chain: String = tokens[idx + 1..]
-      .iter()
-      .map(|t| t.surface.as_str())
-      .collect();
+    let aux_chain: String = tokens[idx + 1..].iter().map(|t| t.surface.as_str()).collect();
 
     if let Some((form_name, description)) =
       identify_inflection(&content.conj_form, &aux_chain, is_adjective)
@@ -360,17 +348,13 @@ impl DictDb {
     let mut results = Vec::new();
 
     for &seq_id in seq_ids {
-      let mut kanji_stmt = self
-        .jmdict
-        .prepare_cached("SELECT keb FROM kanji WHERE ent_seq = ?1")?;
+      let mut kanji_stmt = self.jmdict.prepare_cached("SELECT keb FROM kanji WHERE ent_seq = ?1")?;
       let kanji: Vec<String> = kanji_stmt
         .query_map([seq_id], |row| row.get(0))?
         .filter_map(|r| r.ok())
         .collect();
 
-      let mut read_stmt = self
-        .jmdict
-        .prepare_cached("SELECT reb FROM readings WHERE ent_seq = ?1")?;
+      let mut read_stmt = self.jmdict.prepare_cached("SELECT reb FROM readings WHERE ent_seq = ?1")?;
       let readings: Vec<String> = read_stmt
         .query_map([seq_id], |row| row.get(0))?
         .filter_map(|r| r.ok())

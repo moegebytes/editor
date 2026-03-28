@@ -1,19 +1,10 @@
 use std::collections::BTreeSet;
-use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub fn friendly_io_msg(e: &io::Error, path: &Path) -> String {
-  let p = path.display();
-  match e.kind() {
-    io::ErrorKind::NotFound => format!("File \"{}\" not found.", p),
-    io::ErrorKind::PermissionDenied => format!("Permission denied for \"{}\".", p),
-    io::ErrorKind::AlreadyExists => format!("File \"{}\" already exists.", p),
-    _ => format!("Could not access \"{}\": {}.", p, e.kind()),
-  }
-}
+use crate::util::friendly_io_msg;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,13 +70,36 @@ pub fn project_path(app_data: &Path, id: &str) -> PathBuf {
   projects_dir(app_data).join(format!("{}.json", id))
 }
 
+pub fn read_project(app_data: &Path, id: &str) -> Result<Project, String> {
+  let path = project_path(app_data, id);
+  let content = std::fs::read_to_string(&path).map_err(|e| friendly_io_msg("", &path, &e))?;
+  serde_json::from_str(&content).map_err(|e| format!("Invalid project file: {}", e))
+}
+
+pub fn update_project(
+  app_data: &Path,
+  id: &str,
+  name: &str,
+  files: ProjectFiles,
+  settings: ProjectSettings,
+) -> Result<(), String> {
+  let path = project_path(app_data, id);
+  let content = std::fs::read_to_string(&path).map_err(|e| friendly_io_msg("", &path, &e))?;
+  let mut project: Project =
+    serde_json::from_str(&content).map_err(|e| format!("Invalid project file: {}", e))?;
+  project.name = name.to_string();
+  project.files = files;
+  project.settings = settings;
+  save_project(&path, &project)
+}
+
 pub fn create_project(
   app_data: &Path,
   name: &str,
   files: ProjectFiles,
-) -> Result<(Project, PathBuf), String> {
+) -> Result<(String, Project, PathBuf), String> {
   let dir = projects_dir(app_data);
-  std::fs::create_dir_all(&dir).map_err(|e| friendly_io_msg(&e, &dir))?;
+  std::fs::create_dir_all(&dir).map_err(|e| friendly_io_msg("", &dir, &e))?;
 
   let id = Uuid::new_v4().to_string();
   let path = project_path(app_data, &id);
@@ -99,20 +113,19 @@ pub fn create_project(
   };
 
   let json = serde_json::to_string(&project).map_err(|e| format!("serialize error: {}", e))?;
-  std::fs::write(&path, json).map_err(|e| friendly_io_msg(&e, &path))?;
+  std::fs::write(&path, json).map_err(|e| friendly_io_msg("", &path, &e))?;
 
   let mut recent = load_recent_ids(app_data);
   recent.add(&id);
   save_recent_ids(app_data, &recent);
 
-  Ok((project, path))
+  Ok((id, project, path))
 }
 
 pub fn open_project(app_data: &Path, id: &str) -> Result<(Project, PathBuf), String> {
   let path = project_path(app_data, id);
-  let content = std::fs::read_to_string(&path).map_err(|e| friendly_io_msg(&e, &path))?;
-  let project: Project =
-    serde_json::from_str(&content).map_err(|e| format!("invalid project file: {}", e))?;
+  let content = std::fs::read_to_string(&path).map_err(|e| friendly_io_msg("", &path, &e))?;
+  let project: Project = serde_json::from_str(&content).map_err(|e| format!("invalid project file: {}", e))?;
 
   let mut recent = load_recent_ids(app_data);
   recent.add(id);
@@ -122,9 +135,8 @@ pub fn open_project(app_data: &Path, id: &str) -> Result<(Project, PathBuf), Str
 }
 
 pub fn save_project(path: &Path, project: &Project) -> Result<(), String> {
-  let json = serde_json::to_string(project)
-    .map_err(|e| format!("serialize error: {}", e))?;
-  std::fs::write(path, json).map_err(|e| friendly_io_msg(&e, path))
+  let json = serde_json::to_string(project).map_err(|e| format!("serialize error: {}", e))?;
+  std::fs::write(path, json).map_err(|e| friendly_io_msg("", path, &e))
 }
 
 fn load_recent_ids(app_data: &Path) -> RecentIds {
@@ -226,7 +238,7 @@ pub fn delete_project(app_data: &Path, id: &str) -> Result<(), String> {
   remove_from_recent(app_data, id);
   let path = project_path(app_data, id);
   if path.exists() {
-    std::fs::remove_file(&path).map_err(|e| friendly_io_msg(&e, &path))?;
+    std::fs::remove_file(&path).map_err(|e| friendly_io_msg("", &path, &e))?;
   }
   Ok(())
 }

@@ -7,12 +7,14 @@ import type {
   LookupResult,
   Project,
   ProjectFiles,
+  ProjectInfo,
   ProjectSettings,
   RecentProject,
+  WiktResult,
 } from "./types";
 
-export async function saveEnFile(entries: FlatEntry[]): Promise<void> {
-  return invoke("save_en_file", { entries });
+export async function saveTranslation(entries: FlatEntry[]): Promise<void> {
+  return invoke("save_translation", { entries });
 }
 
 const STRINGS_FILTER = {
@@ -20,8 +22,8 @@ const STRINGS_FILTER = {
   extensions: ["strings", "txt"],
 };
 
-export async function openFileDialog(): Promise<string | null> {
-  return open({ filters: [STRINGS_FILTER] });
+export async function openFileDialog(defaultPath?: string): Promise<string | null> {
+  return open({ filters: [STRINGS_FILTER], defaultPath });
 }
 
 const PROJECT_FILTER = {
@@ -81,8 +83,17 @@ export async function exportProject(destPath: string): Promise<void> {
   return invoke("export_project", { destPath });
 }
 
-export async function renameProject(name: string): Promise<void> {
-  return invoke("rename_project", { name });
+export async function getProjectInfo(id: string): Promise<ProjectInfo> {
+  return invoke("get_project_info", { id });
+}
+
+export async function updateProject(
+  id: string,
+  name: string,
+  files: ProjectFiles,
+  settings: ProjectSettings,
+): Promise<void> {
+  return invoke("update_project", { id, name, files, settings });
 }
 
 export async function importProjectDialog(): Promise<string | null> {
@@ -93,14 +104,19 @@ export async function previewImport(sourcePath: string): Promise<ImportPreview> 
   return invoke("preview_import", { sourcePath });
 }
 
-export async function importProject(
-  sourcePath: string,
-  name: string,
-  files: ProjectFiles,
-): Promise<Project> {
+export async function importProject(sourcePath: string, name: string, files: ProjectFiles): Promise<Project> {
   return invoke("import_project", { sourcePath, name, files });
 }
 
-export async function updateProjectSettings(settings: ProjectSettings): Promise<void> {
-  return invoke("update_project_settings", { settings });
+export async function openAppDir(): Promise<void> {
+  return invoke("open_app_dir");
 }
+
+export async function lookupWiktionary(term: string): Promise<WiktResult> {
+  return invoke("lookup_wiktionary", { term });
+}
+
+export async function clearWiktionaryCache(): Promise<void> {
+  return invoke("clear_wiktionary_cache");
+}
+

@@ -45,11 +45,18 @@ export interface ProjectFiles {
 }
 
 export interface Project {
+  id: string;
   name: string;
   files: ProjectFiles;
   confirmedLines: number[];
   settings: ProjectSettings;
   entries: FlatEntry[];
+}
+
+export interface ProjectInfo {
+  name: string;
+  files: ProjectFiles;
+  settings: ProjectSettings;
 }
 
 export interface RecentProject {
@@ -71,4 +78,33 @@ export interface KanjiEntry {
   onReadings: string[];
   kunReadings: string[];
   meanings: string[];
+}
+
+export interface WiktExample {
+  example: string;
+  transliteration?: string;
+  translation?: string;
+}
+
+export interface WiktDefinition {
+  definition: string;
+  parsedExamples: WiktExample[];
+}
+
+export interface WiktEntry {
+  partOfSpeech: string;
+  language: string;
+  definitions: WiktDefinition[];
+}
+
+export interface WiktLanguageSection {
+  code: string;
+  language: string;
+  entries: WiktEntry[];
+}
+
+export interface WiktResult {
+  term: string;
+  sections: WiktLanguageSection[];
+  cached: boolean;
 }
