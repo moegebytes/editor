@@ -39,20 +39,53 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
 
-      - name: Cache dictionaries
-        id: dict-cache
+      - name: Cache JMdict
+        id: jmdict-cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         with:
-          path: resources/gen
-          key: dictionaries-${{ hashFiles('resources/JMdict_e.xml', 'resources/kanjidic2.xml', 'tools/build-dictionary/**') }}
+          path: resources/gen/jmdict.sqlite
+          key: jmdict-${{ hashFiles('resources/src/JMdict_e.xml.zst', 'tools/build-jmdict/**') }}
 
-      - name: Build dictionaries
-        if: steps.dict-cache.outputs.cache-hit != 'true'
+      - name: Build JMdict
+        if: steps.jmdict-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
+          zstd -d resources/src/JMdict_e.xml.zst
           mkdir -p resources/gen
-          cd tools && cargo run --release -p build-dictionary -- \
-            ../resources/JMdict_e.xml ../resources/kanjidic2.xml ../resources/gen/
+          cd tools && cargo run --release -p build-jmdict -- \
+            ../resources/src/JMdict_e.xml ../resources/gen/
+
+      - name: Cache KANJIDIC2
+        id: kanjidic2-cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        with:
+          path: resources/gen/kanjidic2.sqlite
+          key: kanjidic2-${{ hashFiles('resources/src/kanjidic2.xml.zst', 'tools/build-kanjidic/**') }}
+
+      - name: Build KANJIDIC2
+        if: steps.kanjidic2-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          zstd -d resources/src/kanjidic2.xml.zst
+          mkdir -p resources/gen
+          cd tools && cargo run --release -p build-kanjidic -- \
+            ../resources/src/kanjidic2.xml ../resources/gen/
+
+      - name: Cache Wiktionary
+        id: wiktionary-cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        with:
+          path: resources/gen/wiktionary.sqlite
+          key: wiktionary-${{ hashFiles('resources/src/wiktionary-ja_en.jsonl.zst', 'tools/build-wiktionary/**') }}
+
+      - name: Build Wiktionary
+        if: steps.wiktionary-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          zstd -d resources/src/wiktionary-ja_en.jsonl.zst
+          mkdir -p resources/gen
+          cd tools && cargo run --release -p build-wiktionary -- \
+            ../resources/src/wiktionary-ja_en.jsonl ../resources/gen/
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2

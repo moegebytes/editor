@@ -81,30 +81,49 @@ export interface KanjiEntry {
 }
 
 export interface WiktExample {
-  example: string;
-  transliteration?: string;
-  translation?: string;
+  text: string;
+  english?: string;
+  romaji?: string;
 }
 
-export interface WiktDefinition {
-  definition: string;
-  parsedExamples: WiktExample[];
+export interface WiktRelation {
+  kind: string;
+  term: string;
+  thesaurus: boolean;
 }
 
-export interface WiktEntry {
-  partOfSpeech: string;
-  language: string;
-  definitions: WiktDefinition[];
+export interface WiktSense {
+  gloss: string;
+  rawGloss?: string;
+  tags: string[];
+  examples: WiktExample[];
+  relations: WiktRelation[];
 }
 
-export interface WiktLanguageSection {
-  code: string;
-  language: string;
-  entries: WiktEntry[];
+export interface WiktWordEntry {
+  id: number;
+  word: string;
+  pos: string;
+  etymologyNumber?: number;
+  etymologyText?: string;
+  reading?: string;
+  romaji?: string;
+  display?: string;
+  ipa?: string;
+  senses: WiktSense[];
+  relations: WiktRelation[];
 }
 
 export interface WiktResult {
   term: string;
-  sections: WiktLanguageSection[];
-  cached: boolean;
+  entries: WiktWordEntry[];
+}
+
+export interface EnvironmentInfo {
+  appName: string;
+  appVersion: string;
+  tauriVersion: string;
+  os: string;
+  arch: string;
+  debug: boolean;
 }

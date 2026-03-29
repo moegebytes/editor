@@ -7,9 +7,21 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::core::FlatEntry;
-use crate::dictionary::{DictDb, KanjiEntry, LookupResult};
+use crate::jmdict::{JmdictDb, LookupResult};
+use crate::kanjidic::{KanjiDb, KanjiEntry};
 use crate::project::{self, Project, ProjectFiles, ProjectSettings, RecentProject};
-use crate::wiktionary::{WiktCache, WiktResult};
+use crate::wiktionary::{WiktDb, WiktResult};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentInfo {
+  pub app_name: String,
+  pub app_version: String,
+  pub tauri_version: String,
+  pub os: String,
+  pub arch: String,
+  pub debug: bool,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,23 +40,32 @@ pub struct ProjectInfo {
   pub settings: ProjectSettings,
 }
 
-pub struct DictState(pub Mutex<Option<DictDb>>);
+pub struct JmdictState(pub Mutex<Option<JmdictDb>>);
+pub struct KanjidicState(pub Mutex<Option<KanjiDb>>);
 pub struct ProjectState(pub Mutex<Option<(String, Project, PathBuf)>>);
-pub struct WiktState(pub Mutex<Option<WiktCache>>);
+pub struct WiktState(pub Mutex<Option<WiktDb>>);
 
-impl DictState {
-  fn with_db<T>(&self, f: impl FnOnce(&DictDb) -> Result<T, String>) -> Result<T, String> {
+impl JmdictState {
+  fn with_db<T>(&self, f: impl FnOnce(&JmdictDb) -> Result<T, String>) -> Result<T, String> {
     let lock = self.0.lock().map_err(|e| e.to_string())?;
-    let db = lock.as_ref().ok_or("Dictionary not initialized")?;
+    let db = lock.as_ref().ok_or("JMdict not initialized")?;
+    f(db)
+  }
+}
+
+impl KanjidicState {
+  fn with_db<T>(&self, f: impl FnOnce(&KanjiDb) -> Result<T, String>) -> Result<T, String> {
+    let lock = self.0.lock().map_err(|e| e.to_string())?;
+    let db = lock.as_ref().ok_or("KANJIDIC2 not initialized")?;
     f(db)
   }
 }
 
 impl WiktState {
-  fn with_cache<T>(&self, f: impl FnOnce(&WiktCache) -> Result<T, String>) -> Result<T, String> {
+  fn with_db<T>(&self, f: impl FnOnce(&WiktDb) -> Result<T, String>) -> Result<T, String> {
     let lock = self.0.lock().map_err(|e| e.to_string())?;
-    let cache = lock.as_ref().ok_or("Wiktionary lookup not available")?;
-    f(cache)
+    let db = lock.as_ref().ok_or("Wiktionary dictionary not loaded")?;
+    f(db)
   }
 }
 
@@ -105,22 +126,21 @@ pub fn save_translation(entries: Vec<FlatEntry>, state: State<'_, ProjectState>)
   let path = state.with_ref(|proj, _| Ok(proj.files.en.clone()))?;
   info!("Saving translation to '{}'", path);
   let reconstructed = crate::core::reconstruct_entries(&entries);
-  crate::strings::write_strings(&reconstructed, Path::new(&path))
-    .map_err(|e| crate::util::log_err(e.to_string()))
+  crate::strings::write_strings(&reconstructed, Path::new(&path)).map_err(|e| crate::util::log_err(e.to_string()))
 }
 
 #[tauri::command]
-pub fn lookup_word(query: String, state: State<'_, DictState>) -> Result<LookupResult, String> {
-  state.with_db(|db| db.lookup_word(&query).map_err(|e| {
+pub fn lookup_jmdict(query: String, state: State<'_, JmdictState>) -> Result<LookupResult, String> {
+  state.with_db(|db| db.lookup(&query).map_err(|e| {
     error!("Dictionary lookup failed for '{}': {}", query, e);
     e.to_string()
   }))
 }
 
 #[tauri::command]
-pub fn lookup_kanji(ch: String, state: State<'_, DictState>) -> Result<Option<KanjiEntry>, String> {
+pub fn lookup_kanji(ch: String, state: State<'_, KanjidicState>) -> Result<Option<KanjiEntry>, String> {
   let c = ch.chars().next().ok_or("Empty character")?;
-  state.with_db(|db| db.lookup_kanji(c).map_err(|e| {
+  state.with_db(|db| db.lookup(c).map_err(|e| {
     error!("Kanji lookup failed for '{}': {}", ch, e);
     e.to_string()
   }))
@@ -128,16 +148,8 @@ pub fn lookup_kanji(ch: String, state: State<'_, DictState>) -> Result<Option<Ka
 
 #[tauri::command]
 pub fn lookup_wiktionary(term: String, state: State<'_, WiktState>) -> Result<WiktResult, String> {
-  state.with_cache(|cache| cache.lookup(&term).map_err(|e| {
+  state.with_db(|db| db.lookup(&term).map_err(|e| {
     error!("Wiktionary lookup failed for '{}': {}", term, e);
-    e.to_string()
-  }))
-}
-
-#[tauri::command]
-pub fn clear_wiktionary_cache(state: State<'_, WiktState>) -> Result<(), String> {
-  state.with_cache(|cache| cache.clear_cache().map_err(|e| {
-    error!("Failed to clear Wiktionary cache: {}", e);
     e.to_string()
   }))
 }
@@ -274,8 +286,7 @@ fn read_import_file(source_path: &str) -> Result<Project, String> {
   let path = Path::new(source_path);
   let content = std::fs::read_to_string(path)
     .map_err(|e| crate::util::log_err(crate::util::friendly_io_msg("", path, &e)))?;
-  serde_json::from_str::<Project>(&content)
-    .map_err(|e| crate::util::log_err(format!("Invalid project file: {}", e)))
+  serde_json::from_str::<Project>(&content).map_err(|e| crate::util::log_err(format!("Invalid project file: {}", e)))
 }
 
 #[tauri::command]
@@ -312,4 +323,17 @@ pub fn import_project(
 pub fn open_app_dir(app: AppHandle) -> Result<(), String> {
   let config_dir = app_config_dir(&app)?;
   app.opener().open_path(&*config_dir.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_environment_info(app: AppHandle) -> EnvironmentInfo {
+  let pkg = app.package_info();
+  EnvironmentInfo {
+    app_name: pkg.name.to_string(),
+    app_version: pkg.version.to_string(),
+    tauri_version: tauri::VERSION.to_string(),
+    os: std::env::consts::OS.to_string(),
+    arch: std::env::consts::ARCH.to_string(),
+    debug: cfg!(debug_assertions),
+  }
 }

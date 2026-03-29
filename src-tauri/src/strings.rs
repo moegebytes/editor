@@ -25,7 +25,6 @@ pub enum StringsError {
   },
 }
 
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StringsEntry {
   Comment(String),
@@ -49,10 +48,7 @@ pub fn parse_strings(path: &Path) -> Result<Vec<StringsEntry>, StringsError> {
   parse_strings_inner(&canonical, &mut visited)
 }
 
-fn parse_strings_inner(
-  path: &Path,
-  visited: &mut HashSet<PathBuf>,
-) -> Result<Vec<StringsEntry>, StringsError> {
+fn parse_strings_inner(path: &Path, visited: &mut HashSet<PathBuf>) -> Result<Vec<StringsEntry>, StringsError> {
   let content = std::fs::read_to_string(path).map_err(|e| StringsError::Io {
     path: path.to_path_buf(),
     source: e,

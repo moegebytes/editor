@@ -1,13 +1,17 @@
 <script lang="ts">
-  import { XIcon, SearchIcon } from "@lucide/svelte";
-  import DictTab from "./DictTab.svelte";
+  import { XIcon, SearchIcon, ArrowLeftIcon, ArrowRightIcon } from "@lucide/svelte";
+  import JmdictTab from "./JmdictTab.svelte";
   import WiktTab from "./WiktTab.svelte";
+
+  const MIN_WIDTH = 360;
+  const MAX_WIDTH = 600;
+  const MAX_HISTORY = 100;
 
   let {
     query = "",
     querySeq = 0,
     visible = $bindable(true),
-    width = $bindable(320),
+    width = $bindable(MIN_WIDTH),
   }: {
     query?: string;
     querySeq?: number;
@@ -17,20 +21,37 @@
 
   let searchInput = $state("");
   let activeTab: "dict" | "wikt" = $state("dict");
-  let wiktCached = $state(false);
 
-  let dictTab: DictTab | undefined = $state();
+  let dictTab: JmdictTab | undefined = $state();
   let wiktTab: WiktTab | undefined = $state();
 
-  const MIN_WIDTH = 240;
-  const MAX_WIDTH = 600;
+  let history: string[] = $state([]);
+  let historyIndex = $state(-1);
+  let navigating = false;
+
+  function pushHistory(q: string) {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    if (navigating) {
+      navigating = false;
+      return;
+    }
+    if (historyIndex >= 0 && history[historyIndex] === trimmed) return;
+    history = history.slice(0, historyIndex + 1);
+    history.push(trimmed);
+    if (history.length > MAX_HISTORY) {
+      history = history.slice(history.length - MAX_HISTORY);
+    }
+    historyIndex = history.length - 1;
+  }
 
   function clearState() {
     searchInput = "";
     activeTab = "dict";
-    wiktCached = false;
     dictTab?.clear();
     wiktTab?.clear();
+    history = [];
+    historyIndex = -1;
   }
 
   function close() {
@@ -55,18 +76,16 @@
       lastSeq = querySeq;
       searchInput = query;
       activeTab = "dict";
-      wiktTab?.clear();
-      wiktCached = false;
+      pushHistory(query);
       dictTab?.lookup(query);
+      wiktTab?.lookup(query);
     }
   });
 
   function triggerSearch() {
-    if (activeTab === "wikt") {
-      wiktTab?.lookup(searchInput);
-    } else {
-      dictTab?.lookup(searchInput);
-    }
+    pushHistory(searchInput);
+    dictTab?.lookup(searchInput);
+    wiktTab?.lookup(searchInput);
   }
 
   function handleSearchKeydown(e: KeyboardEvent) {
@@ -78,10 +97,39 @@
 
   function handleNavigate(term: string) {
     searchInput = term;
+    pushHistory(term);
+    dictTab?.lookup(term);
+    wiktTab?.lookup(term);
   }
+
+  let navCanGoBack = $derived(historyIndex > 0);
+  let navCanGoForward = $derived(historyIndex < history.length - 1);
+
+  function goBack() {
+    if (!navCanGoBack) return;
+    historyIndex--;
+    searchInput = history[historyIndex];
+    navigating = true;
+    triggerSearch();
+  }
+
+  function goForward() {
+    if (!navCanGoForward) return;
+    historyIndex++;
+    searchInput = history[historyIndex];
+    navigating = true;
+    triggerSearch();
+  }
+
+  let resizeCleanup: (() => void) | null = null;
+
+  $effect(() => {
+    return () => resizeCleanup?.();
+  });
 
   function startResize(e: MouseEvent) {
     e.preventDefault();
+    resizeCleanup?.();
 
     const startX = e.clientX;
     const startWidth = width;
@@ -94,10 +142,12 @@
     function onUp() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      resizeCleanup = null;
     }
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+    resizeCleanup = onUp;
   }
 </script>
 
@@ -107,6 +157,22 @@
   <div class="dict-panel" style:width="{width}px">
     <div class="dict-content">
       <div class="dict-header">
+        <button
+          class="btn-icon dict-nav-btn"
+          onclick={goBack}
+          disabled={!navCanGoBack}
+          title="Back"
+        >
+          <ArrowLeftIcon size={14} />
+        </button>
+        <button
+          class="btn-icon dict-nav-btn"
+          onclick={goForward}
+          disabled={!navCanGoForward}
+          title="Forward"
+        >
+          <ArrowRightIcon size={14} />
+        </button>
         <input
           type="text"
           placeholder="Search..."
@@ -132,19 +198,19 @@
           class="tab-btn"
           class:active={activeTab === "dict"}
           onclick={() => (activeTab = "dict")}
-        >Dictionary</button>
+        >JMdict</button>
         <button
           class="tab-btn"
           class:active={activeTab === "wikt"}
           onclick={() => (activeTab = "wikt")}
-        >Wiktionary{#if wiktCached}<span class="tab-cached">cached</span>{/if}</button>
+        >Wiktionary</button>
       </div>
 
       <div class="tab-content" class:hidden={activeTab !== "dict"}>
-        <DictTab bind:this={dictTab} onNavigate={handleNavigate} />
+        <JmdictTab bind:this={dictTab} onNavigate={handleNavigate} />
       </div>
       <div class="tab-content" class:hidden={activeTab !== "wikt"}>
-        <WiktTab bind:this={wiktTab} bind:cached={wiktCached} />
+        <WiktTab bind:this={wiktTab} onNavigate={handleNavigate} />
       </div>
     </div>
     <div class="resize-handle" onmousedown={startResize}></div>
@@ -193,11 +259,18 @@
     flex: 1;
   }
 
-  .dict-close, .dict-search-btn {
+  .dict-close, .dict-search-btn, .dict-nav-btn {
     padding: 4px 6px;
     font-size: 12px;
     line-height: 1;
     flex-shrink: 0;
+  }
+
+  .dict-nav-btn {
+    &:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
   }
 
   .dict-search-btn {
@@ -236,12 +309,6 @@
     &.active {
       color: var(--color-accent);
       border-bottom-color: var(--color-accent);
-    }
-
-    .tab-cached {
-      font-size: 10px;
-      color: var(--color-text-muted);
-      margin-left: 4px;
     }
   }
 

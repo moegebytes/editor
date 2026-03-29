@@ -91,12 +91,12 @@
       {:else}
         <label class="check-row">
           <input type="checkbox" bind:checked={draft.autoConfirmOnEnter} />
-          <div>
+          <span class="check-text">
             <span class="check-label">Auto-confirm on Enter</span>
             <span class="check-hint">
               Pressing Enter to move to the next line will also mark the current line as confirmed.
             </span>
-          </div>
+          </span>
         </label>
       {/if}
     </div>
@@ -267,6 +267,10 @@
       flex-shrink: 0;
       margin-top: 1px;
     }
+  }
+
+  .check-text {
+    display: block;
   }
 
   .check-label {

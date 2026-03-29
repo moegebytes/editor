@@ -93,11 +93,7 @@ pub fn update_project(
   save_project(&path, &project)
 }
 
-pub fn create_project(
-  app_data: &Path,
-  name: &str,
-  files: ProjectFiles,
-) -> Result<(String, Project, PathBuf), String> {
+pub fn create_project(app_data: &Path, name: &str, files: ProjectFiles) -> Result<(String, Project, PathBuf), String> {
   let dir = projects_dir(app_data);
   std::fs::create_dir_all(&dir).map_err(|e| friendly_io_msg("", &dir, &e))?;
 
@@ -125,7 +121,7 @@ pub fn create_project(
 pub fn open_project(app_data: &Path, id: &str) -> Result<(Project, PathBuf), String> {
   let path = project_path(app_data, id);
   let content = std::fs::read_to_string(&path).map_err(|e| friendly_io_msg("", &path, &e))?;
-  let project: Project = serde_json::from_str(&content).map_err(|e| format!("invalid project file: {}", e))?;
+  let project: Project = serde_json::from_str(&content).map_err(|e| format!("Invalid project file: {}", e))?;
 
   let mut recent = load_recent_ids(app_data);
   recent.add(id);

@@ -6,33 +6,21 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use vibrato::{Dictionary, Tokenizer};
 
-#[derive(Debug, Error)]
-pub enum DictError {
-  #[error("Database error: {0}.")]
-  Db(#[from] rusqlite::Error),
-
-  #[error("Database '{path}' not found.")]
-  NotFound { path: String },
-
-  #[error("Tokenizer error: {0}.")]
-  Tokenizer(String),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DictEntry {
-  pub ent_seq: i64,
-  pub kanji: Vec<String>,
-  pub readings: Vec<String>,
-  pub senses: Vec<Sense>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sense {
   pub pos: Vec<String>,
   pub glosses: Vec<String>,
   pub misc: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JmdictEntry {
+  pub ent_seq: i64,
+  pub kanji: Vec<String>,
+  pub readings: Vec<String>,
+  pub senses: Vec<Sense>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,21 +35,20 @@ pub struct Inflection {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LookupResult {
-  pub entries: Vec<DictEntry>,
+  pub entries: Vec<JmdictEntry>,
   pub inflections: Vec<Inflection>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct KanjiEntry {
-  pub literal: String,
-  pub grade: Option<i32>,
-  pub stroke_count: i32,
-  pub jlpt: Option<i32>,
-  pub freq: Option<i32>,
-  pub on_readings: Vec<String>,
-  pub kun_readings: Vec<String>,
-  pub meanings: Vec<String>,
+#[derive(Debug, Error)]
+pub enum JmdictError {
+  #[error("Database error: {0}.")]
+  Db(#[from] rusqlite::Error),
+
+  #[error("Database '{path}' not found.")]
+  NotFound { path: String },
+
+  #[error("Tokenizer error: {0}.")]
+  Tokenizer(String),
 }
 
 fn identify_inflection(conj_form: &str, aux_chain: &str, is_adjective: bool) -> Option<(String, String)> {
@@ -136,39 +123,35 @@ fn identify_inflection(conj_form: &str, aux_chain: &str, is_adjective: bool) -> 
   Some((form.to_string(), desc))
 }
 
-pub struct DictDb {
+pub struct JmdictDb {
   jmdict: Connection,
-  kanjidic: Connection,
   tokenizer: Tokenizer,
 }
 
-impl DictDb {
-  pub fn open(jmdict_path: &Path, kanjidic_path: &Path, ipadic_path: &Path) -> Result<Self, DictError> {
-    for path in [jmdict_path, kanjidic_path, ipadic_path] {
+impl JmdictDb {
+  pub fn open(jmdict_path: &Path, ipadic_path: &Path) -> Result<Self, JmdictError> {
+    for path in [jmdict_path, ipadic_path] {
       if !path.exists() {
-        return Err(DictError::NotFound {
+        return Err(JmdictError::NotFound {
           path: path.display().to_string(),
         });
       }
     }
 
-    let jmdict = Connection::open_with_flags(jmdict_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    let kanjidic = Connection::open_with_flags(kanjidic_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let jmdict = Connection::open_with_flags(
+      jmdict_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )?;
 
     let dict_file = std::fs::File::open(ipadic_path)
-      .map_err(|e| DictError::Tokenizer(format!("failed to open IPADIC: {}", e)))?;
+      .map_err(|e| JmdictError::Tokenizer(format!("failed to open IPADIC: {}", e)))?;
     let reader = std::io::BufReader::new(dict_file);
-    let dict = Dictionary::read(reader).map_err(|e| DictError::Tokenizer(format!("dictionary load error: {}", e)))?;
+    let dict = Dictionary::read(reader).map_err(|e| JmdictError::Tokenizer(format!("dictionary load error: {}", e)))?;
     let tokenizer = Tokenizer::new(dict);
 
-    Ok(DictDb {
-      jmdict,
-      kanjidic,
-      tokenizer,
-    })
+    Ok(JmdictDb { jmdict, tokenizer })
   }
 
-  pub fn lookup_word(&self, query: &str) -> Result<LookupResult, DictError> {
+  pub fn lookup(&self, query: &str) -> Result<LookupResult, JmdictError> {
     let trimmed = query.trim();
     if trimmed.is_empty() {
       return Ok(LookupResult { entries: vec![], inflections: vec![] });
@@ -313,8 +296,8 @@ impl DictDb {
     }
   }
 
-  fn lookup_exact(&self, query: &str) -> Result<Vec<DictEntry>, DictError> {
-    let mut stmt = self.jmdict.prepare(
+  fn lookup_exact(&self, query: &str) -> Result<Vec<JmdictEntry>, JmdictError> {
+    let mut stmt = self.jmdict.prepare_cached(
       "SELECT DISTINCT e.ent_seq FROM entries e
        LEFT JOIN kanji k ON e.ent_seq = k.ent_seq
        LEFT JOIN readings r ON e.ent_seq = r.ent_seq
@@ -324,49 +307,44 @@ impl DictDb {
 
     let seq_ids: Vec<i64> = stmt
       .query_map([query], |row| row.get(0))?
-      .filter_map(|r| r.ok())
-      .collect();
+      .collect::<Result<Vec<_>, _>>()?;
 
     self.load_entries(&seq_ids)
   }
 
-  fn lookup_fts(&self, query: &str) -> Result<Vec<DictEntry>, DictError> {
+  fn lookup_fts(&self, query: &str) -> Result<Vec<JmdictEntry>, JmdictError> {
     let fts_query = format!("\"{}\"", query.replace('"', "\"\""));
-    let mut stmt = self.jmdict.prepare(
+    let mut stmt = self.jmdict.prepare_cached(
       "SELECT DISTINCT ent_seq FROM glosses_fts WHERE glosses_fts MATCH ?1 LIMIT 20",
     )?;
 
     let seq_ids: Vec<i64> = stmt
       .query_map([&fts_query], |row| row.get(0))?
-      .filter_map(|r| r.ok())
-      .collect();
+      .collect::<Result<Vec<_>, _>>()?;
 
     self.load_entries(&seq_ids)
   }
 
-  fn load_entries(&self, seq_ids: &[i64]) -> Result<Vec<DictEntry>, DictError> {
+  fn load_entries(&self, seq_ids: &[i64]) -> Result<Vec<JmdictEntry>, JmdictError> {
     let mut results = Vec::new();
 
     for &seq_id in seq_ids {
       let mut kanji_stmt = self.jmdict.prepare_cached("SELECT keb FROM kanji WHERE ent_seq = ?1")?;
       let kanji: Vec<String> = kanji_stmt
         .query_map([seq_id], |row| row.get(0))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
       let mut read_stmt = self.jmdict.prepare_cached("SELECT reb FROM readings WHERE ent_seq = ?1")?;
       let readings: Vec<String> = read_stmt
         .query_map([seq_id], |row| row.get(0))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
       let mut sense_stmt = self.jmdict.prepare_cached(
         "SELECT sense_id, pos, misc FROM senses WHERE ent_seq = ?1 ORDER BY sense_id",
       )?;
       let sense_rows: Vec<(i64, String, String)> = sense_stmt
         .query_map([seq_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
       let mut senses = Vec::new();
       for (sense_id, pos_str, misc_str) in &sense_rows {
@@ -375,8 +353,7 @@ impl DictDb {
         )?;
         let glosses: Vec<String> = gloss_stmt
           .query_map(rusqlite::params![seq_id, sense_id], |row| row.get(0))?
-          .filter_map(|r| r.ok())
-          .collect();
+          .collect::<Result<Vec<_>, _>>()?;
 
         let pos: Vec<String> = pos_str
           .split(';')
@@ -397,7 +374,7 @@ impl DictDb {
         });
       }
 
-      results.push(DictEntry {
+      results.push(JmdictEntry {
         ent_seq: seq_id,
         kanji,
         readings,
@@ -406,57 +383,5 @@ impl DictDb {
     }
 
     Ok(results)
-  }
-
-  pub fn lookup_kanji(&self, ch: char) -> Result<Option<KanjiEntry>, DictError> {
-    let literal = ch.to_string();
-    let mut stmt = self.kanjidic.prepare(
-      "SELECT literal, grade, stroke_count, jlpt, freq FROM kanji WHERE literal = ?1",
-    )?;
-
-    let entry = stmt
-      .query_row([&literal], |row| {
-        Ok(KanjiEntry {
-          literal: row.get(0)?,
-          grade: row.get(1)?,
-          stroke_count: row.get(2)?,
-          jlpt: row.get(3)?,
-          freq: row.get(4)?,
-          on_readings: vec![],
-          kun_readings: vec![],
-          meanings: vec![],
-        })
-      })
-      .ok();
-
-    let Some(mut entry) = entry else {
-      return Ok(None);
-    };
-
-    let mut read_stmt = self
-      .kanjidic
-      .prepare("SELECT reading, r_type FROM readings WHERE literal = ?1")?;
-    let readings: Vec<(String, String)> = read_stmt
-      .query_map([&literal], |row| Ok((row.get(0)?, row.get(1)?)))?
-      .filter_map(|r| r.ok())
-      .collect();
-
-    for (reading, r_type) in readings {
-      match r_type.as_str() {
-        "ja_on" => entry.on_readings.push(reading),
-        "ja_kun" => entry.kun_readings.push(reading),
-        _ => {}
-      }
-    }
-
-    let mut meaning_stmt = self
-      .kanjidic
-      .prepare("SELECT meaning FROM meanings WHERE literal = ?1 AND lang IS NULL")?;
-    entry.meanings = meaning_stmt
-      .query_map([&literal], |row| row.get(0))?
-      .filter_map(|r| r.ok())
-      .collect();
-
-    Ok(Some(entry))
   }
 }

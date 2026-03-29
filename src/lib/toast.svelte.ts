@@ -10,9 +10,14 @@ export interface Toast {
 let nextId = 0;
 let toasts: Toast[] = $state([]);
 
+const MAX_TOASTS = 5;
+
 function add(message: string, type: ToastType, duration: number) {
   const id = nextId++;
   toasts.push({ id, message, type, duration });
+  while (toasts.length > MAX_TOASTS) {
+    toasts.shift();
+  }
   if (duration > 0) {
     setTimeout(() => dismiss(id), duration);
   }

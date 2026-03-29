@@ -1,5 +1,5 @@
 [package]
-name = "build-dictionary"
+name = "build-jmdict"
 edition = "2021"
 
 [dependencies]

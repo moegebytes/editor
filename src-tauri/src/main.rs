@@ -2,7 +2,8 @@
 
 mod commands;
 mod core;
-mod dictionary;
+mod jmdict;
+mod kanjidic;
 mod logging;
 mod project;
 mod strings;
@@ -17,6 +18,7 @@ use tauri::Manager;
 const RES_JMDICT: &str = "resources/jmdict.sqlite";
 const RES_KANJIDIC: &str = "resources/kanjidic2.sqlite";
 const RES_IPADIC: &str = "resources/ipadic-mecab-v270.dict";
+const RES_WIKTIONARY: &str = "resources/wiktionary.sqlite";
 
 fn main() {
   tauri::Builder::default()
@@ -29,12 +31,13 @@ fn main() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_window_state::Builder::new().build())
-    .manage(commands::DictState(Mutex::new(None)))
+    .manage(commands::JmdictState(Mutex::new(None)))
+    .manage(commands::KanjidicState(Mutex::new(None)))
     .manage(commands::ProjectState(Mutex::new(None)))
     .manage(commands::WiktState(Mutex::new(None)))
     .invoke_handler(tauri::generate_handler![
       commands::save_translation,
-      commands::lookup_word,
+      commands::lookup_jmdict,
       commands::lookup_kanji,
       commands::create_project,
       commands::open_project,
@@ -52,7 +55,7 @@ fn main() {
       commands::import_project,
       commands::open_app_dir,
       commands::lookup_wiktionary,
-      commands::clear_wiktionary_cache,
+      commands::get_environment_info,
     ])
     .setup(|app| {
       let config_dir = app.path().app_config_dir()?;
@@ -61,34 +64,53 @@ fn main() {
 
       let resource_dir = app.path().resource_dir()?;
       let jmdict_path = resource_dir.join(RES_JMDICT);
-      let kanjidic_path = resource_dir.join(RES_KANJIDIC);
       let ipadic_path = resource_dir.join(RES_IPADIC);
 
-      if jmdict_path.exists() && kanjidic_path.exists() && ipadic_path.exists() {
-        match dictionary::DictDb::open(&jmdict_path, &kanjidic_path, &ipadic_path) {
+      if jmdict_path.exists() && ipadic_path.exists() {
+        match jmdict::JmdictDb::open(&jmdict_path, &ipadic_path) {
           Ok(db) => {
-            let state = app.state::<commands::DictState>();
-            *state.0.lock().unwrap() = Some(db);
-            info!("Dictionary loaded from bundled resources");
+            let state = app.state::<commands::JmdictState>();
+            *state.0.lock().expect("JMdict state lock poisoned") = Some(db);
+            info!("JMdict loaded from bundled resources");
           }
           Err(e) => {
-            error!("Failed to load dictionary: {}", e);
+            error!("Failed to load JMdict: {}", e);
           }
         }
       } else {
-        warn!("Dictionary files not found at {:?}, {:?}", jmdict_path, kanjidic_path);
+        warn!("JMdict files not found at {:?}", jmdict_path);
       }
 
-      let cache_dir = app.path().app_cache_dir()?;
-      match wiktionary::WiktCache::open(&cache_dir) {
-        Ok(cache) => {
-          let state = app.state::<commands::WiktState>();
-          *state.0.lock().unwrap() = Some(cache);
-          info!("Wiktionary cache initialized");
+      let kanjidic_path = resource_dir.join(RES_KANJIDIC);
+      if kanjidic_path.exists() {
+        match kanjidic::KanjiDb::open(&kanjidic_path) {
+          Ok(db) => {
+            let state = app.state::<commands::KanjidicState>();
+            *state.0.lock().expect("KANJIDIC2 state lock poisoned") = Some(db);
+            info!("KANJIDIC2 loaded from bundled resources");
+          }
+          Err(e) => {
+            error!("Failed to load KANJIDIC2: {}", e);
+          }
         }
-        Err(e) => {
-          error!("Failed to initialize Wiktionary cache: {}", e);
+      } else {
+        warn!("KANJIDIC2 database not found at {:?}", kanjidic_path);
+      }
+
+      let wikt_path = resource_dir.join(RES_WIKTIONARY);
+      if wikt_path.exists() {
+        match wiktionary::WiktDb::open(&wikt_path) {
+          Ok(db) => {
+            let state = app.state::<commands::WiktState>();
+            *state.0.lock().expect("Wiktionary state lock poisoned") = Some(db);
+            info!("Wiktionary dictionary loaded from bundled resources");
+          }
+          Err(e) => {
+            error!("Failed to load Wiktionary dictionary: {}", e);
+          }
         }
+      } else {
+        warn!("Wiktionary database not found at {:?}", wikt_path);
       }
 
       Ok(())

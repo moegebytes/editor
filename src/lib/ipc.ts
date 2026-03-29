@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type {
+  EnvironmentInfo,
   FlatEntry,
   ImportPreview,
   KanjiEntry,
@@ -35,12 +36,16 @@ export async function exportProjectDialog(): Promise<string | null> {
   return save({ filters: [PROJECT_FILTER] });
 }
 
-export async function lookupWord(query: string): Promise<LookupResult> {
-  return invoke("lookup_word", { query });
+export async function lookupJmdict(query: string): Promise<LookupResult> {
+  return invoke("lookup_jmdict", { query });
 }
 
 export async function lookupKanji(ch: string): Promise<KanjiEntry | null> {
   return invoke("lookup_kanji", { ch });
+}
+
+export async function lookupWiktionary(term: string): Promise<WiktResult> {
+  return invoke("lookup_wiktionary", { term });
 }
 
 export async function createProject(name: string, files: ProjectFiles): Promise<Project> {
@@ -112,11 +117,6 @@ export async function openAppDir(): Promise<void> {
   return invoke("open_app_dir");
 }
 
-export async function lookupWiktionary(term: string): Promise<WiktResult> {
-  return invoke("lookup_wiktionary", { term });
+export async function getEnvironmentInfo(): Promise<EnvironmentInfo> {
+  return invoke("get_environment_info");
 }
-
-export async function clearWiktionaryCache(): Promise<void> {
-  return invoke("clear_wiktionary_cache");
-}
-

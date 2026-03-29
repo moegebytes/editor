@@ -13,7 +13,7 @@
     onConfirmToggle,
     onGoToLine,
     onOpenSettings,
-    onClearCaches,
+    onAbout,
     projectName,
     saveDisabled,
     filterText = $bindable(""),
@@ -28,7 +28,7 @@
     onConfirmToggle: () => void;
     onGoToLine: () => void;
     onOpenSettings: () => void;
-    onClearCaches: () => void;
+    onAbout: () => void;
     projectName: string | null;
     saveDisabled: boolean;
     filterText?: string;
@@ -73,8 +73,9 @@
   ]);
 
   let helpItems: MenuEntry[] = $derived([
-    { label: "Clear Caches", action: onClearCaches },
+    { label: "About", action: onAbout },
   ]);
+
 </script>
 
 {#if openMenu}

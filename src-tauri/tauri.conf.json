@@ -21,7 +21,8 @@
     "resources": {
       "../resources/gen/jmdict.sqlite": "resources/jmdict.sqlite",
       "../resources/gen/kanjidic2.sqlite": "resources/kanjidic2.sqlite",
-      "../resources/ipadic-mecab-v270.dict": "resources/ipadic-mecab-v270.dict"
+      "../resources/ipadic-mecab-v270.dict": "resources/ipadic-mecab-v270.dict",
+      "../resources/gen/wiktionary.sqlite": "resources/wiktionary.sqlite"
     }
   },
   "app": {

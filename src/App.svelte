@@ -12,7 +12,6 @@
     saveTranslation,
     saveProject,
     unconfirmLine,
-    clearWiktionaryCache,
   } from "./lib/ipc";
   import Toolbar from "./components/Toolbar.svelte";
   import EditorTable from "./components/EditorTable.svelte";
@@ -23,6 +22,7 @@
   import ContextMenu from "./components/ui/ContextMenu.svelte";
   import SettingsView from "./components/SettingsView.svelte";
   import GoToLineDialog from "./components/GoToLineDialog.svelte";
+  import AboutDialog from "./components/AboutDialog.svelte";
   import UnsavedChangesDialog from "./components/UnsavedChangesDialog.svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { toast } from "./lib/toast.svelte";
@@ -36,6 +36,7 @@
   let projectSettings: ProjectSettings = $state({ autoConfirmOnEnter: false });
   let settingsVisible = $state(false);
   let goToLineVisible = $state(false);
+  let aboutVisible = $state(false);
 
   // Editor state
   let entries: FlatEntry[] = $state([]);
@@ -46,7 +47,6 @@
 
   // Dictionary state
   let dictVisible = $state(false);
-  let dictWidth = $state(320);
   let dictQuery = $state("");
 
   // Filter state
@@ -407,14 +407,7 @@
       onConfirmToggle={confirmToggleCurrent}
       onGoToLine={() => (goToLineVisible = true)}
       onOpenSettings={() => (settingsVisible = true)}
-      onClearCaches={async () => {
-        try {
-          await clearWiktionaryCache();
-          toast.success("Caches cleared");
-        } catch (e) {
-          toast.error(`${e}`);
-        }
-      }}
+      onAbout={() => (aboutVisible = true)}
       {projectName}
       saveDisabled={!modified}
       bind:filterText
@@ -425,7 +418,6 @@
         query={dictQuery}
         querySeq={dictQuerySeq}
         bind:visible={dictVisible}
-        bind:width={dictWidth}
       />
 
       <div class="editor-area">
@@ -470,6 +462,12 @@
   bind:visible={goToLineVisible}
   maxLine={entries.length}
   onGo={handleGoToLine}
+/>
+
+<AboutDialog
+  bind:visible={aboutVisible}
+  {projectName}
+  stats={hasProject ? stats : null}
 />
 
 <UnsavedChangesDialog

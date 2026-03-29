@@ -1,235 +1,231 @@
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use log::{error, warn};
-use percent_encoding::{percent_encode, NON_ALPHANUMERIC};
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WiktError {
-  #[error("Could not reach Wiktionary: {0}")]
-  Network(String),
-  #[error("No Wiktionary entry found for '{term}'.")]
-  NotFound { term: String },
-  #[error("Cache error: {0}")]
-  Cache(#[from] rusqlite::Error),
-  #[error("Failed to parse response: {0}")]
-  Parse(String),
-  #[error("Failed to create cache directory: {0}")]
-  Io(#[from] std::io::Error),
+  #[error("Database error: {0}")]
+  Db(#[from] rusqlite::Error),
+  #[error("Wiktionary database not found at '{path}'.")]
+  NotFound { path: String },
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct WiktExample {
-  #[serde(default)]
-  pub example: String,
-  #[serde(default)]
-  pub transliteration: Option<String>,
-  #[serde(default)]
-  pub translation: Option<String>,
+  pub text: String,
+  pub english: Option<String>,
+  pub romaji: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct WiktDefinition {
-  pub definition: String,
-  #[serde(default)]
-  pub parsed_examples: Vec<WiktExample>,
+pub struct WiktRelation {
+  pub kind: String,
+  pub term: String,
+  pub thesaurus: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct WiktEntry {
-  pub part_of_speech: String,
-  pub language: String,
-  pub definitions: Vec<WiktDefinition>,
+pub struct WiktSense {
+  pub gloss: String,
+  pub raw_gloss: Option<String>,
+  pub tags: Vec<String>,
+  pub examples: Vec<WiktExample>,
+  pub relations: Vec<WiktRelation>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct WiktLanguageSection {
-  pub code: String,
-  pub language: String,
-  pub entries: Vec<WiktEntry>,
+pub struct WiktWordEntry {
+  pub id: i64,
+  pub word: String,
+  pub pos: String,
+  pub etymology_number: Option<i64>,
+  pub etymology_text: Option<String>,
+  pub reading: Option<String>,
+  pub romaji: Option<String>,
+  pub display: Option<String>,
+  pub ipa: Option<String>,
+  pub senses: Vec<WiktSense>,
+  pub relations: Vec<WiktRelation>,
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct WiktResult {
   pub term: String,
-  pub sections: Vec<WiktLanguageSection>,
-  pub cached: bool,
+  pub entries: Vec<WiktWordEntry>,
 }
 
-pub struct WiktCache {
+pub struct WiktDb {
   db: Connection,
-  client: reqwest::blocking::Client,
 }
 
-impl WiktCache {
-  pub fn open(cache_dir: &Path) -> Result<Self, WiktError> {
-    std::fs::create_dir_all(cache_dir)?;
-    let db_path = cache_dir.join("wiktionary.sqlite");
-    let db = Connection::open(&db_path)?;
-    db.execute_batch(
-      "CREATE TABLE IF NOT EXISTS cache (
-        term       TEXT PRIMARY KEY,
-        response   TEXT NOT NULL,
-        fetched_at INTEGER NOT NULL
-      );"
+impl WiktDb {
+  pub fn open(db_path: &Path) -> Result<Self, WiktError> {
+    if !db_path.exists() {
+      return Err(WiktError::NotFound {
+        path: db_path.to_string_lossy().into_owned(),
+      });
+    }
+    let db = Connection::open_with_flags(
+      db_path,
+      rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?;
-
-    let client = reqwest::blocking::Client::builder()
-      .user_agent("Yona/1.0 (Visual Novel Translation Editor)")
-      .build()
-      .map_err(|e| WiktError::Network(e.to_string()))?;
-
-    Ok(Self { db, client })
+    Ok(Self { db })
   }
 
   pub fn lookup(&self, term: &str) -> Result<WiktResult, WiktError> {
-    match self.get_cached(term) {
-      Ok(Some(sections)) => {
-        return Ok(WiktResult { term: term.to_string(), sections, cached: true });
-      }
-      Ok(None) => {}
-      Err(e) => {
-        warn!("Wiktionary cache read failed for '{}': {}", term, e);
-      }
+    let mut stmt = self.db.prepare_cached(
+      "SELECT id, word, pos, etymology_number, etymology_text, reading, romaji, display, ipa \
+       FROM words WHERE word = ?1 ORDER BY etymology_number, pos",
+    )?;
+    let rows = stmt.query_map([term], |row| self.row_to_word(row))?;
+    let mut entries = Vec::new();
+    for row in rows {
+      let mut entry = row?;
+      entry.senses = self.load_senses(entry.id)?;
+      entry.relations = self.load_relations(entry.id, None)?;
+      entries.push(entry);
     }
-
-    let sections = self.fetch_from_api(term)?;
-
-    if let Err(e) = self.store_cache(term, &sections) {
-      warn!("Wiktionary cache write failed for '{}': {}", term, e);
-    }
-
-    Ok(WiktResult { term: term.to_string(), sections, cached: false })
+    Ok(WiktResult { term: term.to_string(), entries })
   }
 
-  fn fetch_from_api(&self, term: &str) -> Result<Vec<WiktLanguageSection>, WiktError> {
-    let encoded = percent_encode(term.as_bytes(), NON_ALPHANUMERIC);
-    let url = format!("https://en.wiktionary.org/api/rest_v1/page/definition/{}", encoded);
+  fn row_to_word(&self, row: &rusqlite::Row) -> rusqlite::Result<WiktWordEntry> {
+    Ok(WiktWordEntry {
+      id: row.get(0)?,
+      word: row.get(1)?,
+      pos: row.get(2)?,
+      etymology_number: row.get(3)?,
+      etymology_text: row.get(4)?,
+      reading: row.get(5)?,
+      romaji: row.get(6)?,
+      display: row.get(7)?,
+      ipa: row.get(8)?,
+      senses: Vec::new(),
+      relations: Vec::new(),
+    })
+  }
 
-    let response = self.client.get(&url).send().map_err(|e| {
-      error!("Wiktionary request failed for '{}': {}", term, e);
-      WiktError::Network(e.to_string())
+  fn load_senses(&self, word_id: i64) -> Result<Vec<WiktSense>, WiktError> {
+    let mut stmt = self.db.prepare_cached(
+      "SELECT id, gloss, raw_gloss, tags FROM senses WHERE word_id = ?1 ORDER BY sort_order",
+    )?;
+    let rows = stmt.query_map([word_id], |row| {
+      let sense_id: i64 = row.get(0)?;
+      let gloss: String = row.get(1)?;
+      let raw_gloss: Option<String> = row.get(2)?;
+      let tags_json: Option<String> = row.get(3)?;
+      Ok((sense_id, gloss, raw_gloss, tags_json))
     })?;
 
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-      return Err(WiktError::NotFound { term: term.to_string() });
+    let mut senses = Vec::new();
+    for row in rows {
+      let (sense_id, gloss, raw_gloss, tags_json) = row?;
+      let tags: Vec<String> = tags_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default();
+      let examples = self.load_examples(sense_id)?;
+      let relations = self.load_relations(word_id, Some(sense_id))?;
+      senses.push(WiktSense { gloss, raw_gloss, tags, examples, relations });
     }
-
-    if !response.status().is_success() {
-      return Err(WiktError::Network(format!("HTTP {}", response.status())));
-    }
-
-    let body = response.text().map_err(|e| WiktError::Parse(e.to_string()))?;
-    parse_definition_response(&body)
+    Ok(senses)
   }
 
-  fn get_cached(&self, term: &str) -> Result<Option<Vec<WiktLanguageSection>>, WiktError> {
-    let mut stmt = self.db.prepare("SELECT response FROM cache WHERE term = ?1")?;
-    let mut rows = stmt.query(rusqlite::params![term])?;
-    match rows.next()? {
-      Some(row) => {
-        let json: String = row.get(0)?;
-        let sections: Vec<WiktLanguageSection> = serde_json::from_str(&json)
-          .map_err(|e| WiktError::Parse(e.to_string()))?;
-        Ok(Some(sections))
+  fn load_examples(&self, sense_id: i64) -> Result<Vec<WiktExample>, WiktError> {
+    let mut stmt = self.db.prepare_cached("SELECT text, english, romaji FROM examples WHERE sense_id = ?1")?;
+    let rows = stmt.query_map([sense_id], |row| {
+      Ok(WiktExample {
+        text: row.get(0)?,
+        english: row.get(1)?,
+        romaji: row.get(2)?,
+      })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(WiktError::from)
+  }
+
+  fn load_relations(&self, word_id: i64, sense_id: Option<i64>) -> Result<Vec<WiktRelation>, WiktError> {
+    let map_row = |row: &rusqlite::Row| -> rusqlite::Result<WiktRelation> {
+      let thesaurus_int: i64 = row.get(2)?;
+      Ok(WiktRelation { kind: row.get(0)?, term: row.get(1)?, thesaurus: thesaurus_int != 0 })
+    };
+    match sense_id {
+      Some(sid) => {
+        let mut stmt = self.db.prepare_cached(
+          "SELECT kind, term, thesaurus FROM relations WHERE word_id = ?1 AND sense_id = ?2",
+        )?;
+        let results = stmt.query_map(rusqlite::params![word_id, sid], map_row)?.collect::<Result<Vec<_>, _>>()?;
+        Ok(results)
       }
-      None => Ok(None),
+      None => {
+        let mut stmt = self.db.prepare_cached(
+          "SELECT kind, term, thesaurus FROM relations WHERE word_id = ?1 AND sense_id IS NULL",
+        )?;
+        let results = stmt.query_map([word_id], map_row)?.collect::<Result<Vec<_>, _>>()?;
+        Ok(results)
+      }
     }
   }
-
-  fn store_cache(&self, term: &str, sections: &[WiktLanguageSection]) -> Result<(), WiktError> {
-    let json = serde_json::to_string(sections).map_err(|e| WiktError::Parse(e.to_string()))?;
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
-    self.db.execute(
-      "INSERT OR REPLACE INTO cache (term, response, fetched_at) VALUES (?1, ?2, ?3)",
-      rusqlite::params![term, json, now],
-    )?;
-    Ok(())
-  }
-
-  pub fn clear_cache(&self) -> Result<(), WiktError> {
-    self.db.execute("DELETE FROM cache", [])?;
-    Ok(())
-  }
-}
-
-fn parse_definition_response(body: &str) -> Result<Vec<WiktLanguageSection>, WiktError> {
-  use std::collections::HashMap;
-
-  let raw: HashMap<String, Vec<WiktEntry>> = serde_json::from_str(body).map_err(|e| WiktError::Parse(e.to_string()))?;
-  let mut sections = Vec::new();
-
-  for (code, entries) in raw {
-    if entries.is_empty() {
-      continue;
-    }
-    let language = entries[0].language.clone();
-    sections.push(WiktLanguageSection { code, language, entries });
-  }
-
-  // Sort: Japanese first, then alphabetical
-  sections.sort_by(|a, b| {
-    let a_jp = a.code == "ja";
-    let b_jp = b.code == "ja";
-    b_jp.cmp(&a_jp).then_with(|| a.language.cmp(&b.language))
-  });
-
-  Ok(sections)
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::path::PathBuf;
 
-  #[test]
-  fn parse_definition_basic() {
-    let json = r#"{
-      "ja": [{
-        "partOfSpeech": "Verb",
-        "language": "Japanese",
-        "definitions": [{
-          "definition": "to eat",
-          "parsedExamples": [{
-            "example": "ご飯を食べる",
-            "transliteration": "gohan o taberu",
-            "translation": "to eat a meal"
-          }]
-        }]
-      }]
-    }"#;
-
-    let sections = parse_definition_response(json).unwrap();
-    assert_eq!(sections.len(), 1);
-    assert_eq!(sections[0].code, "ja");
-    assert_eq!(sections[0].language, "Japanese");
-    assert_eq!(sections[0].entries.len(), 1);
-    assert_eq!(sections[0].entries[0].part_of_speech, "Verb");
-    assert_eq!(sections[0].entries[0].definitions[0].definition, "to eat");
-    assert_eq!(
-      sections[0].entries[0].definitions[0].parsed_examples[0].translation,
-      Some("to eat a meal".to_string())
-    );
+  fn test_db_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("resources/gen/wiktionary.sqlite")
   }
 
   #[test]
-  fn parse_definition_multi_language() {
-    let json = r#"{
-      "en": [{"partOfSpeech": "Noun", "language": "English", "definitions": [{"definition": "water"}]}],
-      "ja": [{"partOfSpeech": "Noun", "language": "Japanese", "definitions": [{"definition": "water"}]}],
-      "fr": [{"partOfSpeech": "Noun", "language": "French", "definitions": [{"definition": "eau"}]}]
-    }"#;
+  fn lookup_exact_match() {
+    let db_path = test_db_path();
+    if !db_path.exists() {
+      eprintln!("Skipping test: wiktionary.sqlite not found");
+      return;
+    }
+    let db = WiktDb::open(&db_path).unwrap();
+    let result = db.lookup("食べる").unwrap();
+    assert!(!result.entries.is_empty());
+    assert_eq!(result.entries[0].word, "食べる");
+    assert_eq!(result.entries[0].pos, "verb");
+    assert!(!result.entries[0].senses.is_empty());
+    assert_eq!(result.entries[0].senses[0].gloss, "to eat");
+  }
 
-    let sections = parse_definition_response(json).unwrap();
-    assert_eq!(sections.len(), 3);
-    assert_eq!(sections[0].language, "Japanese");
-    assert_eq!(sections[1].language, "English");
-    assert_eq!(sections[2].language, "French");
+  #[test]
+  fn lookup_with_relations() {
+    let db_path = test_db_path();
+    if !db_path.exists() {
+      eprintln!("Skipping test: wiktionary.sqlite not found");
+      return;
+    }
+    let db = WiktDb::open(&db_path).unwrap();
+    let result = db.lookup("月").unwrap();
+    assert!(result.entries.len() >= 9);
+
+    let etym4 = result
+      .entries
+      .iter()
+      .find(|e| e.etymology_number == Some(4) && e.pos == "noun")
+      .expect("etymology 4 noun not found");
+    let sense_rels = &etym4.senses[0].relations;
+    assert!(sense_rels.iter().any(|r| r.kind == "coordinate_term" && r.term == "影"), "expected coordinate_term 影");
+    let thesaurus_syn = sense_rels.iter().find(|r| r.kind == "synonym" && r.term == "娼婦");
+    assert!(thesaurus_syn.is_some(), "expected thesaurus synonym 娼婦");
+    assert!(thesaurus_syn.unwrap().thesaurus, "expected thesaurus flag");
+  }
+
+  #[test]
+  fn lookup_not_found() {
+    let db_path = test_db_path();
+    if !db_path.exists() {
+      eprintln!("Skipping test: wiktionary.sqlite not found");
+      return;
+    }
+    let db = WiktDb::open(&db_path).unwrap();
+    let result = db.lookup("zzzznonexistent").unwrap();
+    assert!(result.entries.is_empty());
   }
 }
