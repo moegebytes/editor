@@ -298,11 +298,7 @@ impl JmdictDb {
 
   fn lookup_exact(&self, query: &str) -> Result<Vec<JmdictEntry>, JmdictError> {
     let mut stmt = self.jmdict.prepare_cached(
-      "SELECT DISTINCT e.ent_seq FROM entries e
-       LEFT JOIN kanji k ON e.ent_seq = k.ent_seq
-       LEFT JOIN readings r ON e.ent_seq = r.ent_seq
-       WHERE k.keb = ?1 OR r.reb = ?1
-       LIMIT 20",
+      "SELECT ent_seq FROM kanji WHERE keb = ?1 UNION SELECT ent_seq FROM readings WHERE reb = ?1 LIMIT 20",
     )?;
 
     let seq_ids: Vec<i64> = stmt

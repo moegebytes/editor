@@ -10,6 +10,7 @@
   } from "@lucide/svelte";
   import type { FlatEntry } from "../lib/types";
   import { isText, isUntranslated, toggleSetMember, getFileName } from "../lib/utils";
+  import UnsavedChangesDialog from "./UnsavedChangesDialog.svelte";
 
   let {
     entries,
@@ -117,6 +118,10 @@
     }),
   );
 
+  function measureRow(node: HTMLElement) {
+    $virtualizer.measureElement(node);
+  }
+
   function childCount(includeIndex: number): number {
     const includeEntry = entries[includeIndex];
     let count = 0;
@@ -127,20 +132,56 @@
     return count;
   }
 
+  let discardNotesVisible = $state(false);
+  let pendingNotesTarget: number | null = $state(null);
+
+  function hasUnsavedNotes(): boolean {
+    if (expandedNotes === null) return false;
+    const entry = entries.find((e) => e.index === expandedNotes);
+    const saved = entry?.notes.join("\n") ?? "";
+    return notesDraft !== saved;
+  }
+
+  function openNotes(entryIndex: number) {
+    expandedNotes = entryIndex;
+    const entry = entries.find((e) => e.index === entryIndex);
+    notesDraft = entry?.notes.join("\n") ?? "";
+    requestAnimationFrame(() => {
+      const textarea = scrollElement?.querySelector(
+        `[data-entry-index="${entryIndex}"] .notes-textarea`,
+      );
+      if (textarea instanceof HTMLTextAreaElement) textarea.focus();
+    });
+  }
+
   function toggleNotes(entryIndex: number) {
-    if (expandedNotes === entryIndex) {
+    const closing = expandedNotes === entryIndex;
+    if (hasUnsavedNotes()) {
+      pendingNotesTarget = closing ? null : entryIndex;
+      discardNotesVisible = true;
+      return;
+    }
+    if (closing) {
       expandedNotes = null;
     } else {
-      expandedNotes = entryIndex;
-      const entry = entries.find((e) => e.index === entryIndex);
-      notesDraft = entry?.notes.join("\n") ?? "";
-      requestAnimationFrame(() => {
-        const textarea = scrollElement?.querySelector(
-          `[data-entry-index="${entryIndex}"] .notes-textarea`,
-        );
-        if (textarea instanceof HTMLTextAreaElement) textarea.focus();
-      });
+      openNotes(entryIndex);
     }
+  }
+
+  function handleSaveAndSwitchNotes() {
+    if (expandedNotes !== null) saveNotes(expandedNotes);
+    if (pendingNotesTarget !== null) {
+      openNotes(pendingNotesTarget);
+    }
+    pendingNotesTarget = null;
+  }
+
+  function handleDiscardNotes() {
+    expandedNotes = null;
+    if (pendingNotesTarget !== null) {
+      openNotes(pendingNotesTarget);
+    }
+    pendingNotesTarget = null;
   }
 
   function saveNotes(entryIndex: number) {
@@ -216,12 +257,13 @@
     selectedIndex = entryIndex;
   }
 
-  function handleJpMouseUp() {
+  function handleJpMouseUp(e: MouseEvent) {
     const sel = window.getSelection();
-    const text = sel?.toString().trim();
-    if (text && onJpSelect) {
-      onJpSelect(text);
-    }
+    if (!sel || sel.isCollapsed || !onJpSelect) return;
+    const cell = (e.currentTarget as HTMLElement);
+    if (!cell.contains(sel.anchorNode) || !cell.contains(sel.focusNode)) return;
+    const text = sel.toString().trim();
+    if (text) onJpSelect(text);
   }
 
   function visibleIndexOf(entryIndex: number): number {
@@ -259,6 +301,10 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    const currentVisible = visibleIndexOf(selectedIndex);
+    const isEnFocused = document.activeElement instanceof HTMLInputElement
+            && scrollElement?.contains(document.activeElement);
+
     if (event.ctrlKey && event.key === "s") {
       event.preventDefault();
       onSave?.();
@@ -267,6 +313,11 @@
 
     if (event.key === "Escape" && !event.defaultPrevented) {
       if (expandedNotes !== null) {
+        if (hasUnsavedNotes()) {
+          pendingNotesTarget = null;
+          discardNotesVisible = true;
+          return;
+        }
         expandedNotes = null;
       } else if (document.activeElement instanceof HTMLInputElement) {
         document.activeElement.blur();
@@ -277,6 +328,8 @@
     if (event.ctrlKey && event.key === "Enter") {
       event.preventDefault();
       if (selectedIndex >= 0) onToggleConfirm?.(selectedIndex);
+      const target = findEditableRow(currentVisible, 1);
+      if (target >= 0) scrollToVisibleRow(target);
       return;
     }
 
@@ -286,16 +339,20 @@
       return;
     }
 
-    const currentVisible = visibleIndexOf(selectedIndex);
-    const isEnFocused = document.activeElement instanceof HTMLInputElement
-      && scrollElement?.contains(document.activeElement);
-
     if (event.key === "Enter" && isEnFocused) {
       event.preventDefault();
       if (autoConfirmOnEnter && selectedIndex >= 0 && !confirmedLines.has(selectedIndex)) {
         onToggleConfirm?.(selectedIndex);
       }
       const target = findEditableRow(currentVisible, 1);
+      if (target >= 0) scrollToVisibleRow(target);
+      return;
+    }
+
+    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && isEnFocused) {
+      event.preventDefault();
+      const dir = event.key === "ArrowDown" ? 1 : -1;
+      const target = findEditableRow(currentVisible, dir as 1 | -1);
       if (target >= 0) scrollToVisibleRow(target);
       return;
     }
@@ -344,10 +401,13 @@
           class:row-find-current={findQuery && currentFindMatch >= 0 && findMatchIndices[currentFindMatch] === entry.index}
           style:position="absolute"
           style:top="{row.start}px"
-          style:height="{ROW_HEIGHT}px"
+          style:height={expandedNotes === entry.index ? "auto" : `${ROW_HEIGHT}px`}
+          style:min-height="{ROW_HEIGHT}px"
           style:left="0"
           style:right="0"
           data-entry-index={entry.index}
+          data-index={row.index}
+          use:measureRow
           onclick={() => handleRowClick(entry.index)}
         >
 
@@ -406,8 +466,12 @@
                   rows="3"
                 ></textarea>
                 <div class="notes-actions">
-                  <button class="btn-primary" onclick={() => saveNotes(entry.index)}>Save</button>
-                  <button onclick={() => (expandedNotes = null)}>Cancel</button>
+                  <button
+                    class="btn-primary"
+                    disabled={!hasUnsavedNotes()}
+                    onclick={() => saveNotes(entry.index)}
+                  >Save</button>
+                  <button onclick={() => toggleNotes(entry.index)}>Cancel</button>
                 </div>
               </div>
             {/if}
@@ -477,6 +541,12 @@
   </div>
 {/if}
 
+<UnsavedChangesDialog
+  bind:visible={discardNotesVisible}
+  onSave={handleSaveAndSwitchNotes}
+  onDiscard={handleDiscardNotes}
+/>
+
 <style>
   .empty-state {
     display: flex;
@@ -512,6 +582,7 @@
   .table-row {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     border-bottom: 1px solid var(--color-border);
     cursor: default;
   }
@@ -644,16 +715,10 @@
   }
 
   .notes-panel {
-    position: absolute;
-    top: 100%;
-    left: 70px;
-    right: 12px;
-    z-index: 10;
+    width: 100%;
+    padding: 8px 12px 8px 70px;
     background: var(--color-surface);
-    border: 1px solid var(--color-accent);
-    border-radius: 4px;
-    padding: 8px;
-    box-shadow: var(--shadow-dropdown);
+    border-top: 1px solid var(--color-accent);
 
     .notes-textarea {
       width: 100%;
