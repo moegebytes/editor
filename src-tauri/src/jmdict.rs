@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::path::Path;
 
 use rusqlite::Connection;
@@ -12,14 +11,31 @@ pub struct Sense {
   pub pos: Vec<String>,
   pub glosses: Vec<String>,
   pub misc: Vec<String>,
+  pub xrefs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KanjiForm {
+  pub text: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub info: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadingForm {
+  pub text: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub info: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JmdictEntry {
   pub ent_seq: i64,
-  pub kanji: Vec<String>,
-  pub readings: Vec<String>,
+  pub kanji: Vec<KanjiForm>,
+  pub readings: Vec<ReadingForm>,
   pub senses: Vec<Sense>,
 }
 
@@ -138,9 +154,7 @@ impl JmdictDb {
       }
     }
 
-    let jmdict = Connection::open_with_flags(
-      jmdict_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-    )?;
+    let jmdict = Connection::open_with_flags(jmdict_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
 
     let dict_file = std::fs::File::open(ipadic_path)
       .map_err(|e| JmdictError::Tokenizer(format!("failed to open IPADIC: {}", e)))?;
@@ -166,54 +180,10 @@ impl JmdictDb {
       return Ok(LookupResult { entries: exact, inflections });
     }
 
-    // Tokenize with vibrato and look up each meaningful token
-    let mut worker = self.tokenizer.new_worker();
-    worker.reset_sentence(trimmed);
-    worker.tokenize();
+    // Try prefix match on kanji/readings
+    let mut entries = self.lookup_prefix(trimmed)?;
 
-    let mut entries = Vec::new();
-    let mut seen_seqs = HashSet::new();
-
-    for i in 0..worker.num_tokens() {
-      let token = worker.token(i);
-      let surface = token.surface();
-      let feature = token.feature();
-      let fields: Vec<&str> = feature.split(',').collect();
-
-      // Skip particles, auxiliary verbs, symbols
-      if !fields.is_empty() {
-        let pos = fields[0];
-        if pos == "助詞" || pos == "助動詞" || pos == "記号" {
-          continue;
-        }
-      }
-
-      // Look up the base/dictionary form if available (field index 6 in ipadic)
-      let lookup_form = if fields.len() > 6 && fields[6] != "*" {
-        fields[6]
-      } else {
-        surface
-      };
-
-      let token_entries = self.lookup_exact(lookup_form)?;
-      for entry in token_entries {
-        if seen_seqs.insert(entry.ent_seq) {
-          entries.push(entry);
-        }
-      }
-
-      // Also try the surface form if different from dictionary form
-      if lookup_form != surface {
-        let surface_entries = self.lookup_exact(surface)?;
-        for entry in surface_entries {
-          if seen_seqs.insert(entry.ent_seq) {
-            entries.push(entry);
-          }
-        }
-      }
-    }
-
-    // If tokenization yielded nothing, fall back to fts5
+    // Fall back to FTS gloss search (for English queries)
     if entries.is_empty() {
       entries = self.lookup_fts(trimmed)?;
     }
@@ -297,27 +267,41 @@ impl JmdictDb {
   }
 
   fn lookup_exact(&self, query: &str) -> Result<Vec<JmdictEntry>, JmdictError> {
+    // Order by priority, then prefer entries where query matches the primary kanji/reading
     let mut stmt = self.jmdict.prepare_cached(
-      "SELECT ent_seq FROM kanji WHERE keb = ?1 UNION SELECT ent_seq FROM readings WHERE reb = ?1 LIMIT 20",
+      "SELECT e.ent_seq FROM entries e \
+       WHERE e.ent_seq IN (SELECT ent_seq FROM kanji WHERE keb = ?1 UNION SELECT ent_seq FROM readings WHERE reb = ?1) \
+       ORDER BY e.priority ASC, \
+         CASE WHEN (SELECT keb FROM kanji WHERE ent_seq = e.ent_seq LIMIT 1) = ?1 THEN 0 \
+              WHEN (SELECT reb FROM readings WHERE ent_seq = e.ent_seq LIMIT 1) = ?1 THEN 1 \
+              ELSE 2 END \
+       LIMIT 20",
     )?;
 
-    let seq_ids: Vec<i64> = stmt
-      .query_map([query], |row| row.get(0))?
-      .collect::<Result<Vec<_>, _>>()?;
+    let seq_ids: Vec<i64> = stmt.query_map([query], |row| row.get(0))?.collect::<Result<Vec<_>, _>>()?;
+    self.load_entries(&seq_ids)
+  }
 
+  fn lookup_prefix(&self, query: &str) -> Result<Vec<JmdictEntry>, JmdictError> {
+    let pattern = format!("{}%", query);
+    let mut stmt = self.jmdict.prepare_cached(
+      "SELECT e.ent_seq FROM entries e \
+       WHERE e.ent_seq IN (SELECT ent_seq FROM kanji WHERE keb LIKE ?1 UNION SELECT ent_seq FROM readings WHERE reb LIKE ?1) \
+       ORDER BY e.priority ASC LIMIT 20",
+    )?;
+
+    let seq_ids: Vec<i64> = stmt.query_map([&pattern], |row| row.get(0))?.collect::<Result<Vec<_>, _>>()?;
     self.load_entries(&seq_ids)
   }
 
   fn lookup_fts(&self, query: &str) -> Result<Vec<JmdictEntry>, JmdictError> {
     let fts_query = format!("\"{}\"", query.replace('"', "\"\""));
     let mut stmt = self.jmdict.prepare_cached(
-      "SELECT DISTINCT ent_seq FROM glosses_fts WHERE glosses_fts MATCH ?1 LIMIT 20",
+      "SELECT e.ent_seq FROM entries e WHERE e.ent_seq IN (SELECT DISTINCT ent_seq FROM glosses_fts WHERE glosses_fts MATCH ?1) \
+       ORDER BY e.priority ASC LIMIT 20",
     )?;
 
-    let seq_ids: Vec<i64> = stmt
-      .query_map([&fts_query], |row| row.get(0))?
-      .collect::<Result<Vec<_>, _>>()?;
-
+    let seq_ids: Vec<i64> = stmt.query_map([&fts_query], |row| row.get(0))?.collect::<Result<Vec<_>, _>>()?;
     self.load_entries(&seq_ids)
   }
 
@@ -325,14 +309,14 @@ impl JmdictDb {
     let mut results = Vec::new();
 
     for &seq_id in seq_ids {
-      let mut kanji_stmt = self.jmdict.prepare_cached("SELECT keb FROM kanji WHERE ent_seq = ?1")?;
-      let kanji: Vec<String> = kanji_stmt
-        .query_map([seq_id], |row| row.get(0))?
+      let mut kanji_stmt = self.jmdict.prepare_cached("SELECT keb, inf FROM kanji WHERE ent_seq = ?1")?;
+      let kanji: Vec<KanjiForm> = kanji_stmt
+        .query_map([seq_id], |row| Ok(KanjiForm { text: row.get(0)?, info: row.get(1)? }))?
         .collect::<Result<Vec<_>, _>>()?;
 
-      let mut read_stmt = self.jmdict.prepare_cached("SELECT reb FROM readings WHERE ent_seq = ?1")?;
-      let readings: Vec<String> = read_stmt
-        .query_map([seq_id], |row| row.get(0))?
+      let mut read_stmt = self.jmdict.prepare_cached("SELECT reb, inf FROM readings WHERE ent_seq = ?1")?;
+      let readings: Vec<ReadingForm> = read_stmt
+        .query_map([seq_id], |row| Ok(ReadingForm { text: row.get(0)?, info: row.get(1)? }))?
         .collect::<Result<Vec<_>, _>>()?;
 
       let mut sense_stmt = self.jmdict.prepare_cached(
@@ -344,10 +328,13 @@ impl JmdictDb {
 
       let mut senses = Vec::new();
       for (sense_id, pos_str, misc_str) in &sense_rows {
-        let mut gloss_stmt = self.jmdict.prepare_cached(
-          "SELECT gloss FROM glosses WHERE ent_seq = ?1 AND sense_id = ?2",
-        )?;
+        let mut gloss_stmt = self.jmdict.prepare_cached("SELECT gloss FROM glosses WHERE ent_seq = ?1 AND sense_id = ?2")?;
         let glosses: Vec<String> = gloss_stmt
+          .query_map(rusqlite::params![seq_id, sense_id], |row| row.get(0))?
+          .collect::<Result<Vec<_>, _>>()?;
+
+        let mut xref_stmt = self.jmdict.prepare_cached("SELECT xref FROM xrefs WHERE ent_seq = ?1 AND sense_id = ?2")?;
+        let xrefs: Vec<String> = xref_stmt
           .query_map(rusqlite::params![seq_id, sense_id], |row| row.get(0))?
           .collect::<Result<Vec<_>, _>>()?;
 
@@ -367,6 +354,7 @@ impl JmdictDb {
           pos,
           glosses,
           misc,
+          xrefs,
         });
       }
 

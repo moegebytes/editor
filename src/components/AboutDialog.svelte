@@ -77,7 +77,7 @@
         </li>
         <li>
           <strong>Wiktionary</strong> — multilingual dictionary data
-          <span class="credit-note">via Wiktextract project</span>
+          <span class="credit-note">Wikimedia Foundation, via Wiktextract project</span>
         </li>
         <li>
           <strong>vibrato</strong> — Japanese morphological analysis

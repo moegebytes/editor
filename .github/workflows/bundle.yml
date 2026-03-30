@@ -16,17 +16,20 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
-            bundles: appimage
-            artifact: x86_64-appimage
-            glob: "*.AppImage"
+            bundles: appimage,deb,rpm
+            artifact: x86_64-linux
+            paths: |
+              src-tauri/target/release/bundle/appimage/*.AppImage
+              src-tauri/target/release/bundle/deb/*.deb
+              src-tauri/target/release/bundle/rpm/*.rpm
           - os: windows-2022
             bundles: nsis
-            artifact: x86_64-nsis
-            glob: "*.exe"
+            artifact: x86_64-windows
+            paths: src-tauri/target/release/bundle/nsis/*.exe
           - os: macos-15
             bundles: dmg
-            artifact: arm64-dmg
-            glob: "*.dmg"
+            artifact: arm64-macos
+            paths: src-tauri/target/release/bundle/dmg/*.dmg
 
     runs-on: ${{ matrix.os }}
 
@@ -82,10 +85,10 @@ jobs:
         if: steps.wiktionary-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          zstd -d resources/src/wiktionary-ja_en.jsonl.zst
+          zstd -d resources/src/enwiktionary-ja_en.jsonl.zst
           mkdir -p resources/gen
           cd tools && cargo run --release -p build-wiktionary -- \
-            ../resources/src/wiktionary-ja_en.jsonl ../resources/gen/
+            ../resources/src/enwiktionary-ja_en.jsonl ../resources/gen/
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
@@ -96,7 +99,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm
 
       - name: Set up PNPM package manager
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
@@ -116,5 +119,5 @@ jobs:
       - name: Upload bundle
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: bundle-${{ matrix.artifact }}-${{github.sha}}
-          path: src-tauri/target/release/bundle/${{ matrix.bundles }}/${{ matrix.glob }}
+          name: ${{ matrix.artifact }}-${{github.sha}}
+          path: ${{ matrix.paths }}

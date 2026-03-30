@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DictEntry, Inflection } from "../lib/types";
+  import type { DictEntry, Inflection, KanjiForm, ReadingForm } from "../lib/types";
   import { lookupJmdict } from "../lib/ipc";
   import { isKanji } from "../lib/utils";
   import KanjiDetail from "./KanjiDetail.svelte";
@@ -57,6 +57,34 @@
   function navigateToBaseForm(baseForm: string) {
     onNavigate?.(baseForm);
   }
+
+  function entryNotes(entry: DictEntry): string[] {
+    const notes: string[] = [];
+    for (const k of entry.kanji) {
+      if (k.info) notes.push(`${k.text}: ${k.info}.`);
+    }
+    for (const r of entry.readings) {
+      if (r.info) notes.push(`${r.text}: ${r.info}.`);
+    }
+    return notes;
+  }
+
+  function otherForms(entry: DictEntry): { kanji?: string; reading: string }[] {
+    if (entry.kanji.length <= 1 && entry.readings.length <= 1) return [];
+    const forms: { kanji?: string; reading: string }[] = [];
+    if (entry.kanji.length > 1) {
+      for (let i = 1; i < entry.kanji.length; i++) {
+        const reading = entry.readings[i]?.text ?? entry.readings[0]?.text;
+        if (reading) forms.push({ kanji: entry.kanji[i].text, reading });
+      }
+    }
+    if (entry.readings.length > entry.kanji.length) {
+      for (let i = Math.max(1, entry.kanji.length); i < entry.readings.length; i++) {
+        forms.push({ reading: entry.readings[i].text });
+      }
+    }
+    return forms;
+  }
 </script>
 
 {#if loading}
@@ -88,11 +116,13 @@
 
 <div class="dict-results">
   {#each results as entry (entry.entSeq)}
+    {@const notes = entryNotes(entry)}
+    {@const forms = otherForms(entry)}
     <div class="dict-entry">
       <div class="entry-headword">
         {#if entry.kanji.length > 0}
           <span class="kanji-text">
-            {#each entry.kanji[0].split("") as ch}
+            {#each entry.kanji[0].text.split("") as ch}
               {#if isKanji(ch)}
                 <button
                   class="btn-icon kanji-link"
@@ -105,7 +135,7 @@
           </span>
         {/if}
         <span class="reading-text">
-          {entry.readings.join("\u3001")}
+          {entry.readings.map((r) => r.text).join("\u3001")}
         </span>
       </div>
 
@@ -123,8 +153,42 @@
               ({sense.misc.join(", ")})
             </span>
           {/if}
+          {#if sense.xrefs.length > 0}
+            <div class="xrefs">
+              See also:
+              {#each sense.xrefs as xref, xi}
+                {@const term = xref.split("\u30FB")[0]}
+                {#if xi > 0}, {/if}
+                <button
+                  class="btn-icon xref-link"
+                  onclick={() => onNavigate?.(term)}
+                >{xref}</button>
+              {/each}
+            </div>
+          {/if}
         </div>
       {/each}
+
+      {#if forms.length > 0}
+        <div class="other-forms">
+          <span class="other-forms-label">Other forms</span>
+          {#each forms as form, fi}
+            {#if fi > 0}、{/if}
+            {#if form.kanji}
+              {form.kanji}【{form.reading}】
+            {:else}
+              {form.reading}
+            {/if}
+          {/each}
+        </div>
+      {/if}
+
+      {#if notes.length > 0}
+        <div class="entry-notes">
+          <span class="entry-notes-label">Notes</span>
+          {notes.join(" ")}
+        </div>
+      {/if}
     </div>
   {/each}
 </div>
@@ -219,6 +283,34 @@
       }
     }
 
+    .other-forms {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--color-text-muted);
+
+      .other-forms-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+    }
+
+    .entry-notes {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      font-style: italic;
+      margin-top: 4px;
+
+      .entry-notes-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        font-style: normal;
+        margin-bottom: 2px;
+      }
+    }
+
     .sense {
       font-size: 13px;
       line-height: 1.5;
@@ -242,7 +334,23 @@
         font-size: 11px;
         font-style: italic;
       }
+
+      .xrefs {
+        font-size: 12px;
+        color: var(--color-text-muted);
+        margin-top: 2px;
+
+        .xref-link {
+          color: var(--color-accent);
+          text-decoration: underline;
+          text-decoration-style: dotted;
+          text-underline-offset: 2px;
+
+          &:hover {
+            text-decoration-style: solid;
+          }
+        }
+      }
     }
   }
-
 </style>

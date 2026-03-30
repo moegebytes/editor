@@ -24,14 +24,12 @@ pub struct WiktExample {
 pub struct WiktRelation {
   pub kind: String,
   pub term: String,
-  pub thesaurus: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct WiktSense {
   pub gloss: String,
-  pub raw_gloss: Option<String>,
   pub tags: Vec<String>,
   pub examples: Vec<WiktExample>,
   pub relations: Vec<WiktRelation>,
@@ -43,11 +41,10 @@ pub struct WiktWordEntry {
   pub id: i64,
   pub word: String,
   pub pos: String,
-  pub etymology_number: Option<i64>,
-  pub etymology_text: Option<String>,
+  pub lang_code: Option<String>,
+  pub sort_group: Option<i64>,
   pub reading: Option<String>,
   pub romaji: Option<String>,
-  pub display: Option<String>,
   pub ipa: Option<String>,
   pub senses: Vec<WiktSense>,
   pub relations: Vec<WiktRelation>,
@@ -80,8 +77,8 @@ impl WiktDb {
 
   pub fn lookup(&self, term: &str) -> Result<WiktResult, WiktError> {
     let mut stmt = self.db.prepare_cached(
-      "SELECT id, word, pos, etymology_number, etymology_text, reading, romaji, display, ipa \
-       FROM words WHERE word = ?1 ORDER BY etymology_number, pos",
+      "SELECT id, word, pos, lang_code, sort_group, reading, romaji, ipa \
+       FROM words WHERE word = ?1 ORDER BY sort_group, pos",
     )?;
     let rows = stmt.query_map([term], |row| self.row_to_word(row))?;
     let mut entries = Vec::new();
@@ -99,12 +96,11 @@ impl WiktDb {
       id: row.get(0)?,
       word: row.get(1)?,
       pos: row.get(2)?,
-      etymology_number: row.get(3)?,
-      etymology_text: row.get(4)?,
+      lang_code: row.get(3)?,
+      sort_group: row.get(4)?,
       reading: row.get(5)?,
       romaji: row.get(6)?,
-      display: row.get(7)?,
-      ipa: row.get(8)?,
+      ipa: row.get(7)?,
       senses: Vec::new(),
       relations: Vec::new(),
     })
@@ -112,23 +108,22 @@ impl WiktDb {
 
   fn load_senses(&self, word_id: i64) -> Result<Vec<WiktSense>, WiktError> {
     let mut stmt = self.db.prepare_cached(
-      "SELECT id, gloss, raw_gloss, tags FROM senses WHERE word_id = ?1 ORDER BY sort_order",
+      "SELECT id, gloss, tags FROM senses WHERE word_id = ?1 ORDER BY sort_order",
     )?;
     let rows = stmt.query_map([word_id], |row| {
       let sense_id: i64 = row.get(0)?;
       let gloss: String = row.get(1)?;
-      let raw_gloss: Option<String> = row.get(2)?;
-      let tags_json: Option<String> = row.get(3)?;
-      Ok((sense_id, gloss, raw_gloss, tags_json))
+      let tags_json: Option<String> = row.get(2)?;
+      Ok((sense_id, gloss, tags_json))
     })?;
 
     let mut senses = Vec::new();
     for row in rows {
-      let (sense_id, gloss, raw_gloss, tags_json) = row?;
+      let (sense_id, gloss, tags_json) = row?;
       let tags: Vec<String> = tags_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default();
       let examples = self.load_examples(sense_id)?;
       let relations = self.load_relations(word_id, Some(sense_id))?;
-      senses.push(WiktSense { gloss, raw_gloss, tags, examples, relations });
+      senses.push(WiktSense { gloss, tags, examples, relations });
     }
     Ok(senses)
   }
@@ -147,20 +142,19 @@ impl WiktDb {
 
   fn load_relations(&self, word_id: i64, sense_id: Option<i64>) -> Result<Vec<WiktRelation>, WiktError> {
     let map_row = |row: &rusqlite::Row| -> rusqlite::Result<WiktRelation> {
-      let thesaurus_int: i64 = row.get(2)?;
-      Ok(WiktRelation { kind: row.get(0)?, term: row.get(1)?, thesaurus: thesaurus_int != 0 })
+      Ok(WiktRelation { kind: row.get(0)?, term: row.get(1)? })
     };
     match sense_id {
       Some(sid) => {
         let mut stmt = self.db.prepare_cached(
-          "SELECT kind, term, thesaurus FROM relations WHERE word_id = ?1 AND sense_id = ?2",
+          "SELECT kind, term FROM relations WHERE word_id = ?1 AND sense_id = ?2",
         )?;
         let results = stmt.query_map(rusqlite::params![word_id, sid], map_row)?.collect::<Result<Vec<_>, _>>()?;
         Ok(results)
       }
       None => {
         let mut stmt = self.db.prepare_cached(
-          "SELECT kind, term, thesaurus FROM relations WHERE word_id = ?1 AND sense_id IS NULL",
+          "SELECT kind, term FROM relations WHERE word_id = ?1 AND sense_id IS NULL",
         )?;
         let results = stmt.query_map([word_id], map_row)?.collect::<Result<Vec<_>, _>>()?;
         Ok(results)
@@ -208,13 +202,11 @@ mod tests {
     let etym4 = result
       .entries
       .iter()
-      .find(|e| e.etymology_number == Some(4) && e.pos == "noun")
-      .expect("etymology 4 noun not found");
+      .find(|e| e.sort_group == Some(4) && e.pos == "noun")
+      .expect("sort_group 4 noun not found");
     let sense_rels = &etym4.senses[0].relations;
     assert!(sense_rels.iter().any(|r| r.kind == "coordinate_term" && r.term == "影"), "expected coordinate_term 影");
-    let thesaurus_syn = sense_rels.iter().find(|r| r.kind == "synonym" && r.term == "娼婦");
-    assert!(thesaurus_syn.is_some(), "expected thesaurus synonym 娼婦");
-    assert!(thesaurus_syn.unwrap().thesaurus, "expected thesaurus flag");
+    assert!(sense_rels.iter().any(|r| r.kind == "synonym" && r.term == "パンパン"), "expected synonym パンパン");
   }
 
   #[test]

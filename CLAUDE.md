@@ -83,7 +83,7 @@ editor/
     ├── src/                     -- Compressed source data (zstd)
     │   ├── JMdict_e.xml.zst
     │   ├── kanjidic2.xml.zst
-    │   └── wiktionary-ja_en.jsonl.zst
+    │   └── enwiktionary-ja_en.jsonl.zst
     ├── gen/                     -- Generated files (gitignored)
     │   ├── jmdict.sqlite
     │   ├── kanjidic2.sqlite
@@ -123,9 +123,9 @@ Tools (Dictionary/Go to Line/Find & Replace), Help (About). Filter input (CTRL+F
 
 **Dictionary panel:** Two tabs: **JMdict** and **Wiktionary**. Shared search input with search button.
 Back/forward navigation (shared history, 100 entries max). Arrow buttons in header. JMdict tab: Vibrato tokenizes JP
-text, looks up tokens, inflection detection with base form navigation. Wiktionary tab: Entries grouped by etymology
-with senses, examples, synonyms, antonyms, coordinate terms, and other relations. External query changes auto-search
-both tabs and reset to JMdict tab.
+text, looks up tokens, inflection detection with base form navigation with results ordered by priority (ke_pri/re_pri).
+Wiktionary tab: Entries grouped by etymology with senses, examples, synonyms, antonyms, coordinate terms, and other
+relations. External query changes auto-search both tabs and reset to JMdict tab.
 
 **Find & Replace (Ctrl+H):** Searches EN text in filtered entries. Real-time match count, navigate Enter/Shift+Enter,
 replace current or all.
@@ -188,7 +188,7 @@ get_environment_info() -> EnvironmentInfo { appName, appVersion, tauriVersion, o
 # decompress resources (one-time, requires zstd)
 zstd -d resources/src/JMdict_e.xml.zst
 zstd -d resources/src/kanjidic2.xml.zst
-zstd -d resources/src/wiktionary-ja_en.jsonl.zst
+zstd -d resources/src/enwiktionary-ja_en.jsonl.zst
 
 # build JMdict database (one-time)
 cd tools && cargo run -p build-jmdict -- \
@@ -200,7 +200,7 @@ cd tools && cargo run -p build-kanjidic -- \
 
 # build wiktionary database (one-time)
 cd tools && cargo run -p build-wiktionary -- \
-  ../resources/src/wiktionary-ja_en.jsonl ../resources/gen/
+  ../resources/src/enwiktionary-ja_en.jsonl ../resources/gen/
 ```
 
 ```bash
@@ -223,7 +223,7 @@ pnpm tauri build
 ```bash
 # clone repository
 git clone https://github.com/tatuylonen/wiktextract.git && \
-  git checkout f47b8fc87a0e17f4dcca68f534e73f4c6fa8e8e7
+  git checkout 05c257fdecbc64e73a31a2ca2c0f6cb0ee4c0a68
 
 # apply patch for romaji (https://github.com/tatuylonen/wiktextract/issues/1620)
 git apply <<EOF
@@ -258,15 +258,24 @@ pip install -U pip && pip install -e .
 wget https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2
 
 # prepare database
-wiktwords --db-path enwiktionary-latest.db --edition en \
-  --skip-extraction enwiktionary-latest-pages-articles.xml.bz2
+wiktwords --db-path enwiktionary-latest.db --edition en --skip-extraction enwiktionary-latest-pages-articles.xml.bz2
 
 # extract entries
 wiktwords --db-path enwiktionary-latest.db --edition en --language-code ja \
-  --examples --etymologies --linkages --pronunciations --out wiktionary-pre-ja_en.jsonl
+  --examples --etymologies --linkages --pronunciations --out enwiktionary-ja.jsonl
 
-# clean-up remaining stale elements such as redirects or non-ja thesaurus
-jq -c 'select(.lang_code == "ja")' wiktionary-pre-ja_en.jsonl > wiktionary-ja_en.jsonl
+wiktwords --db-path enwiktionary-latest.db --edition en --language-code en \
+  --examples --etymologies --linkages --pronunciations --out enwiktionary-en.jsonl
+
+# combine both languages and clean-up remaining stale elements such as redirects
+# or unrelated thesaurus entries
+cat <<EOF > enwiktionary-ja_en.jq
+select(has("senses") and has("pos") and (.senses | length > 0))
+| del(.categories, .head_templates, .etymology_templates, .etymology_text, .lang)
+| del(.senses[].categories, .senses[].raw_glosses, .senses[].topics, .senses[].links)
+| .sounds = [.sounds[]? | select(has("audio") | not)]
+EOF
+jq -cf enwiktionary-ja_en.jq enwiktionary-ja.jsonl enwiktionary-en.jsonl > enwiktionary-ja_en.jsonl
 ```
 
 ## Coding Conventions

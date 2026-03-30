@@ -175,7 +175,7 @@ fn build_kanjidic(xml_path: &str, db_path: &PathBuf) -> Result<()> {
   }
 
   tx.commit()?;
-  conn.execute_batch("PRAGMA journal_mode=DELETE;")?;
+  conn.execute_batch("PRAGMA journal_mode=DELETE; VACUUM;")?;
   eprintln!("  {} characters total", char_count);
   Ok(())
 }

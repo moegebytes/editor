@@ -20,14 +20,8 @@ struct RawSound {
 }
 
 #[derive(Deserialize)]
-struct RawHeadTemplate {
-  expansion: Option<String>,
-}
-
-#[derive(Deserialize)]
 struct RawRelation {
   word: Option<String>,
-  source: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -41,7 +35,6 @@ struct RawExample {
 #[derive(Deserialize)]
 struct RawSense {
   glosses: Option<Vec<String>>,
-  raw_glosses: Option<Vec<String>>,
   tags: Option<Vec<String>>,
   examples: Option<Vec<RawExample>>,
   synonyms: Option<Vec<RawRelation>>,
@@ -57,11 +50,10 @@ struct RawSense {
 struct RawEntry {
   word: String,
   pos: String,
+  lang_code: Option<String>,
   etymology_number: Option<i64>,
-  etymology_text: Option<String>,
   forms: Option<Vec<RawForm>>,
   sounds: Option<Vec<RawSound>>,
-  head_templates: Option<Vec<RawHeadTemplate>>,
   senses: Option<Vec<RawSense>>,
   synonyms: Option<Vec<RawRelation>>,
   antonyms: Option<Vec<RawRelation>>,
@@ -102,11 +94,10 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
        id               INTEGER PRIMARY KEY,
        word             TEXT NOT NULL,
        pos              TEXT NOT NULL,
-       etymology_number INTEGER,
-       etymology_text   TEXT,
+       lang_code        TEXT,
+       sort_group       INTEGER,
        reading          TEXT,
        romaji           TEXT,
-       display          TEXT,
        ipa              TEXT
      );
      CREATE TABLE senses (
@@ -114,7 +105,6 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
        word_id    INTEGER NOT NULL REFERENCES words(id),
        sort_order INTEGER NOT NULL,
        gloss      TEXT NOT NULL,
-       raw_gloss  TEXT,
        tags       TEXT
      );
      CREATE TABLE examples (
@@ -129,8 +119,7 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
        word_id  INTEGER NOT NULL REFERENCES words(id),
        sense_id INTEGER,
        kind     TEXT NOT NULL,
-       term     TEXT NOT NULL,
-       thesaurus INTEGER NOT NULL DEFAULT 0
+       term     TEXT NOT NULL
      );
      CREATE INDEX idx_words_word ON words(word);
      CREATE INDEX idx_senses_word_id ON senses(word_id);
@@ -168,39 +157,42 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
       continue;
     }
 
+    let is_en = entry.lang_code.as_deref() == Some("en");
+
+    // Check if entry has at least one sense with a gloss
+    let has_senses = entry.senses.as_ref().map_or(false, |senses| {
+      senses.iter().any(|s| s.glosses.as_ref().map_or(false, |g| g.first().is_some()))
+    });
+    if !has_senses {
+      skip_count += 1;
+      continue;
+    }
+
     word_id += 1;
 
     let reading = extract_reading(&entry);
     let romaji = extract_romaji(&entry);
-    let display = entry
-      .head_templates
-      .as_ref()
-      .and_then(|t| t.first())
-      .and_then(|t| t.expansion.as_deref());
     let ipa = entry
       .sounds
       .as_ref()
       .and_then(|s| s.iter().find_map(|s| s.ipa.as_deref()));
 
-    let etymology_text = entry.etymology_text.as_deref().map(clean_etymology);
-
     tx.execute(
-      "INSERT INTO words (id, word, pos, etymology_number, etymology_text, \
-       reading, romaji, display, ipa) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+      "INSERT INTO words (id, word, pos, lang_code, sort_group, \
+       reading, romaji, ipa) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
       rusqlite::params![
         word_id,
         entry.word,
         entry.pos,
+        entry.lang_code,
         entry.etymology_number,
-        etymology_text,
         reading,
         romaji,
-        display,
         ipa,
       ],
     )?;
 
-    insert_entry_relations(&tx, word_id, None, &entry)?;
+    insert_entry_relations(&tx, word_id, None, &entry, is_en)?;
 
     if let Some(senses) = &entry.senses {
       for (i, sense) in senses.iter().enumerate() {
@@ -211,32 +203,33 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
 
         sense_id += 1;
 
-        let raw_gloss = sense.raw_glosses.as_ref().and_then(|g| g.first());
         let tags = sense.tags.as_ref().map(|t| serde_json::to_string(t).unwrap());
 
         tx.execute(
-          "INSERT INTO senses (id, word_id, sort_order, gloss, raw_gloss, tags) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-          rusqlite::params![sense_id, word_id, i as i64, gloss, raw_gloss, tags],
+          "INSERT INTO senses (id, word_id, sort_order, gloss, tags) VALUES (?1, ?2, ?3, ?4, ?5)",
+          rusqlite::params![sense_id, word_id, i as i64, gloss, tags],
         )?;
 
-        if let Some(examples) = &sense.examples {
-          for ex in examples {
-            let text = match ex.text.as_deref() {
-              Some(t) if !t.is_empty() => t,
-              _ => continue,
-            };
-            let english = ex
-              .english
-              .as_deref()
-              .or(ex.translation.as_deref());
-            tx.execute(
-              "INSERT INTO examples (sense_id, text, english, romaji) VALUES (?1, ?2, ?3, ?4)",
-              rusqlite::params![sense_id, text, english, ex.roman],
-            )?;
+        if !is_en {
+          if let Some(examples) = &sense.examples {
+            for ex in examples {
+              let text = match ex.text.as_deref() {
+                Some(t) if !t.is_empty() => t,
+                _ => continue,
+              };
+              let english = ex
+                .english
+                .as_deref()
+                .or(ex.translation.as_deref());
+              tx.execute(
+                "INSERT INTO examples (sense_id, text, english, romaji) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![sense_id, text, english, ex.roman],
+              )?;
+            }
           }
         }
 
-        insert_sense_relations(&tx, word_id, sense_id, sense)?;
+        insert_sense_relations(&tx, word_id, sense_id, sense, is_en)?;
       }
     }
 
@@ -246,28 +239,19 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
     }
   }
 
+  eprintln!("  {} entries inserted, {} skipped", entry_count, skip_count);
+
   eprintln!("  Pruning dangling relations...");
   let pruned = tx.execute(
-    "DELETE FROM relations WHERE term NOT IN (SELECT DISTINCT word FROM words) AND thesaurus = 0",
+    "DELETE FROM relations WHERE term NOT IN (SELECT DISTINCT word FROM words)",
     [],
   )?;
   eprintln!("  {} dangling relations removed", pruned);
 
   tx.commit()?;
-  conn.execute_batch("PRAGMA journal_mode=DELETE;")?;
+  conn.execute_batch("PRAGMA journal_mode=DELETE; VACUUM;")?;
 
-  eprintln!("  {} entries inserted, {} skipped", entry_count, skip_count);
   Ok(())
-}
-
-fn clean_etymology(text: &str) -> String {
-  text
-    .lines()
-    .filter(|line| !line.contains("see WT:"))
-    .collect::<Vec<_>>()
-    .join("\n")
-    .trim()
-    .to_string()
 }
 
 fn extract_reading(entry: &RawEntry) -> Option<String> {
@@ -297,28 +281,18 @@ fn insert_relations(
   sense_id: Option<i64>,
   pairs: Vec<(&str, &Option<Vec<RawRelation>>)>,
 ) -> Result<()> {
-  use std::collections::HashSet;
-
   for (kind, relations) in pairs {
     if let Some(rels) = relations {
-      let mut thesaurus_seen = HashSet::new();
       for rel in rels {
-        let source = rel.source.as_deref().unwrap_or("");
-        if let Some(thesaurus_term) = source.strip_prefix("Thesaurus:") {
-          if thesaurus_seen.insert(thesaurus_term.to_string()) {
-            tx.execute(
-              "INSERT INTO relations (word_id, sense_id, kind, term, thesaurus) VALUES (?1, ?2, ?3, ?4, 1)",
-              rusqlite::params![word_id, sense_id, kind, thesaurus_term],
-            )?;
-          }
-        } else if let Some(term) = rel.word.as_deref() {
-          if !term.is_empty() {
-            tx.execute(
-              "INSERT INTO relations (word_id, sense_id, kind, term, thesaurus) VALUES (?1, ?2, ?3, ?4, 0)",
-              rusqlite::params![word_id, sense_id, kind, term],
-            )?;
-          }
+        let Some(term) = rel.word.as_deref() else { continue };
+        if term.is_empty() {
+          continue;
         }
+        tx.execute(
+          "INSERT INTO relations (word_id, sense_id, kind, term) \
+           VALUES (?1, ?2, ?3, ?4)",
+          rusqlite::params![word_id, sense_id, kind, term],
+        )?;
       }
     }
   }
@@ -330,15 +304,19 @@ fn insert_entry_relations(
   word_id: i64,
   sense_id: Option<i64>,
   entry: &RawEntry,
+  is_en: bool,
 ) -> Result<()> {
-  insert_relations(tx, word_id, sense_id, vec![
+  let mut pairs: Vec<(&str, &Option<Vec<RawRelation>>)> = vec![
     ("synonym", &entry.synonyms),
     ("antonym", &entry.antonyms),
     ("coordinate_term", &entry.coordinate_terms),
     ("related", &entry.related),
-    ("derived", &entry.derived),
     ("hyponym", &entry.hyponyms),
-  ])
+  ];
+  if !is_en {
+    pairs.push(("derived", &entry.derived));
+  }
+  insert_relations(tx, word_id, sense_id, pairs)
 }
 
 fn insert_sense_relations(
@@ -346,14 +324,18 @@ fn insert_sense_relations(
   word_id: i64,
   sense_id: i64,
   sense: &RawSense,
+  is_en: bool,
 ) -> Result<()> {
-  insert_relations(tx, word_id, Some(sense_id), vec![
+  let mut pairs: Vec<(&str, &Option<Vec<RawRelation>>)> = vec![
     ("synonym", &sense.synonyms),
     ("antonym", &sense.antonyms),
     ("coordinate_term", &sense.coordinate_terms),
     ("related", &sense.related),
-    ("derived", &sense.derived),
     ("hypernym", &sense.hypernyms),
     ("hyponym", &sense.hyponyms),
-  ])
+  ];
+  if !is_en {
+    pairs.push(("derived", &sense.derived));
+  }
+  insert_relations(tx, word_id, Some(sense_id), pairs)
 }

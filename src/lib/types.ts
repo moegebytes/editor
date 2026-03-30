@@ -22,10 +22,20 @@ export interface LookupResult {
   inflections: Inflection[];
 }
 
+export interface KanjiForm {
+  text: string;
+  info?: string;
+}
+
+export interface ReadingForm {
+  text: string;
+  info?: string;
+}
+
 export interface DictEntry {
   entSeq: number;
-  kanji: string[];
-  readings: string[];
+  kanji: KanjiForm[];
+  readings: ReadingForm[];
   senses: Sense[];
 }
 
@@ -33,6 +43,7 @@ export interface Sense {
   pos: string[];
   glosses: string[];
   misc: string[];
+  xrefs: string[];
 }
 
 export interface ProjectSettings {
@@ -89,12 +100,10 @@ export interface WiktExample {
 export interface WiktRelation {
   kind: string;
   term: string;
-  thesaurus: boolean;
 }
 
 export interface WiktSense {
   gloss: string;
-  rawGloss?: string;
   tags: string[];
   examples: WiktExample[];
   relations: WiktRelation[];
@@ -104,11 +113,10 @@ export interface WiktWordEntry {
   id: number;
   word: string;
   pos: string;
-  etymologyNumber?: number;
-  etymologyText?: string;
+  langCode?: string;
+  sortGroup?: number;
   reading?: string;
   romaji?: string;
-  display?: string;
   ipa?: string;
   senses: WiktSense[];
   relations: WiktRelation[];

@@ -125,9 +125,6 @@
 
         <span class="pos-tags">{entry.pos}</span>
 
-        {#if entry.etymologyText}
-          <div class="wikt-etymology">{entry.etymologyText}</div>
-        {/if}
 
         {#each entry.senses as sense, i}
           <div class="sense">
@@ -159,9 +156,9 @@
                   {#each group.items as rel}
                     <button
                       class="relation-link"
-                      class:thesaurus={rel.thesaurus}
+
                       onclick={() => navigateTo(rel.term)}
-                    >{rel.thesaurus ? `Thesaurus:${rel.term}` : rel.term}</button>
+                    >{rel.term}</button>
                   {/each}
                 </div>
               {/each}
@@ -178,9 +175,8 @@
                 {#each group.items as rel}
                   <button
                     class="relation-link"
-                    class:thesaurus={rel.thesaurus}
                     onclick={() => navigateTo(rel.term)}
-                  >{rel.thesaurus ? `Thesaurus:${rel.term}` : rel.term}</button>
+                  >{rel.term}</button>
                 {/each}
               </div>
             {/each}
@@ -264,13 +260,6 @@
       margin-bottom: 2px;
     }
 
-    .wikt-etymology {
-      font-size: 12px;
-      color: var(--color-text-muted);
-      margin: 4px 0 6px 8px;
-      line-height: 1.5;
-      white-space: pre-line;
-    }
 
     .sense {
       font-size: 13px;
@@ -345,10 +334,6 @@
 
         &:hover {
           text-decoration-style: solid;
-        }
-
-        &.thesaurus {
-          font-style: italic;
         }
       }
     }

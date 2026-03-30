@@ -25,6 +25,27 @@ fn main() -> Result<()> {
   Ok(())
 }
 
+fn pri_score(tag: &str) -> i32 {
+  match tag {
+    "ichi1" => 10,
+    "news1" => 20,
+    "spec1" => 30,
+    "ichi2" => 40,
+    "news2" => 50,
+    "spec2" => 60,
+    "gai1" => 70,
+    "gai2" => 80,
+    _ if tag.starts_with("nf") => {
+      tag[2..].parse::<i32>().unwrap_or(99) + 100
+    }
+    _ => 999,
+  }
+}
+
+fn compute_priority(tags: &[String]) -> i32 {
+  tags.iter().map(|t| pri_score(t)).min().unwrap_or(999)
+}
+
 fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
   let entity_map = parse_jmdict_entities(xml_path)?;
 
@@ -35,18 +56,20 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
   conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=OFF;")?;
 
   conn.execute_batch(
-    "CREATE TABLE entries (ent_seq INTEGER PRIMARY KEY);
-     CREATE TABLE kanji (ent_seq INTEGER, keb TEXT);
-     CREATE TABLE readings (ent_seq INTEGER, reb TEXT);
+    "CREATE TABLE entries (ent_seq INTEGER PRIMARY KEY, priority INTEGER NOT NULL DEFAULT 999);
+     CREATE TABLE kanji (ent_seq INTEGER, keb TEXT, inf TEXT);
+     CREATE TABLE readings (ent_seq INTEGER, reb TEXT, inf TEXT);
      CREATE TABLE senses (ent_seq INTEGER, sense_id INTEGER, pos TEXT, misc TEXT);
      CREATE TABLE glosses (ent_seq INTEGER, sense_id INTEGER, gloss TEXT);
+     CREATE TABLE xrefs (ent_seq INTEGER, sense_id INTEGER, xref TEXT);
      CREATE VIRTUAL TABLE glosses_fts USING fts5(gloss, ent_seq UNINDEXED, content=glosses);
      CREATE INDEX idx_kanji_seq ON kanji(ent_seq);
      CREATE INDEX idx_kanji_keb ON kanji(keb);
      CREATE INDEX idx_readings_seq ON readings(ent_seq);
      CREATE INDEX idx_readings_reb ON readings(reb);
      CREATE INDEX idx_senses_seq ON senses(ent_seq);
-     CREATE INDEX idx_glosses_seq ON glosses(ent_seq, sense_id);",
+     CREATE INDEX idx_glosses_seq ON glosses(ent_seq, sense_id);
+     CREATE INDEX idx_xrefs_seq ON xrefs(ent_seq, sense_id);",
   )?;
 
   let tx = conn.transaction()?;
@@ -66,12 +89,18 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
   let mut current_tag = String::new();
 
   let mut ent_seq: i64 = 0;
-  let mut kanji_list: Vec<String> = Vec::new();
-  let mut reading_list: Vec<String> = Vec::new();
+  let mut kanji_list: Vec<(String, Vec<String>)> = Vec::new(); // (keb, ke_inf[])
+  let mut reading_list: Vec<(String, Vec<String>)> = Vec::new(); // (reb, re_inf[])
+  let mut pri_list: Vec<String> = Vec::new(); // all ke_pri + re_pri for current entry
+  let mut current_keb = String::new();
+  let mut current_reb = String::new();
+  let mut current_ke_inf: Vec<String> = Vec::new();
+  let mut current_re_inf: Vec<String> = Vec::new();
   let mut sense_id: i64 = 0;
   let mut pos_list: Vec<String> = Vec::new();
   let mut misc_list: Vec<String> = Vec::new();
   let mut gloss_list: Vec<String> = Vec::new();
+  let mut xref_list: Vec<String> = Vec::new();
 
   loop {
     match reader.read_event_into(&mut buf) {
@@ -85,16 +114,26 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
             ent_seq = 0;
             kanji_list.clear();
             reading_list.clear();
+            pri_list.clear();
             sense_id = 0;
           }
-          "k_ele" => in_k_ele = true,
-          "r_ele" => in_r_ele = true,
+          "k_ele" => {
+            in_k_ele = true;
+            current_keb.clear();
+            current_ke_inf.clear();
+          }
+          "r_ele" => {
+            in_r_ele = true;
+            current_reb.clear();
+            current_re_inf.clear();
+          }
           "sense" => {
             in_sense = true;
             sense_id += 1;
             pos_list.clear();
             misc_list.clear();
             gloss_list.clear();
+            xref_list.clear();
           }
           _ => {}
         }
@@ -104,12 +143,15 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
         match tag.as_str() {
           "entry" => {
             if in_entry && ent_seq > 0 {
-              tx.execute("INSERT INTO entries VALUES (?1)", [ent_seq])?;
-              for k in &kanji_list {
-                tx.execute("INSERT INTO kanji VALUES (?1, ?2)", rusqlite::params![ent_seq, k])?;
+              let priority = compute_priority(&pri_list);
+              tx.execute("INSERT INTO entries VALUES (?1, ?2)", rusqlite::params![ent_seq, priority])?;
+              for (keb, inf) in &kanji_list {
+                let inf_str = if inf.is_empty() { None } else { Some(inf.join("; ")) };
+                tx.execute("INSERT INTO kanji VALUES (?1, ?2, ?3)", rusqlite::params![ent_seq, keb, inf_str])?;
               }
-              for r in &reading_list {
-                tx.execute("INSERT INTO readings VALUES (?1, ?2)",rusqlite::params![ent_seq, r])?;
+              for (reb, inf) in &reading_list {
+                let inf_str = if inf.is_empty() { None } else { Some(inf.join("; ")) };
+                tx.execute("INSERT INTO readings VALUES (?1, ?2, ?3)", rusqlite::params![ent_seq, reb, inf_str])?;
               }
               entry_count += 1;
               if entry_count % 1000 == 0 {
@@ -118,8 +160,18 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
             }
             in_entry = false;
           }
-          "k_ele" => in_k_ele = false,
-          "r_ele" => in_r_ele = false,
+          "k_ele" => {
+            if !current_keb.is_empty() {
+              kanji_list.push((current_keb.clone(), current_ke_inf.clone()));
+            }
+            in_k_ele = false;
+          }
+          "r_ele" => {
+            if !current_reb.is_empty() {
+              reading_list.push((current_reb.clone(), current_re_inf.clone()));
+            }
+            in_r_ele = false;
+          }
           "sense" => {
             if in_sense && ent_seq > 0 {
               let pos_str = pos_list.join(";");
@@ -129,9 +181,10 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
                 rusqlite::params![ent_seq, sense_id, pos_str, misc_str],
               )?;
               for g in &gloss_list {
-                tx.execute("INSERT INTO glosses VALUES (?1, ?2, ?3)",
-                  rusqlite::params![ent_seq, sense_id, g],
-                )?;
+                tx.execute("INSERT INTO glosses VALUES (?1, ?2, ?3)", rusqlite::params![ent_seq, sense_id, g])?;
+              }
+              for x in &xref_list {
+                tx.execute("INSERT INTO xrefs VALUES (?1, ?2, ?3)", rusqlite::params![ent_seq, sense_id, x])?;
               }
             }
             in_sense = false;
@@ -147,24 +200,26 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
         let text = String::from_utf8_lossy(e.as_ref()).to_string();
         match current_tag.as_str() {
           "ent_seq" => ent_seq = text.parse().unwrap_or(0),
-          "keb" if in_k_ele => kanji_list.push(text),
-          "reb" if in_r_ele => reading_list.push(text),
+          "keb" if in_k_ele => current_keb = text,
+          "reb" if in_r_ele => current_reb = text,
+          "ke_pri" if in_k_ele => pri_list.push(text),
+          "re_pri" if in_r_ele => pri_list.push(text),
           "gloss" if in_sense => gloss_list.push(text),
+          "xref" if in_sense => xref_list.push(text),
           _ => {}
         }
       }
       Ok(Event::GeneralRef(e)) => {
-        if !in_entry || !in_sense {
-          continue; // Entity references like &n;, &v1;, etc.
+        if !in_entry {
+          continue;
         }
         let name = String::from_utf8_lossy(e.as_ref()).to_string();
-        let resolved = entity_map
-          .get(&name)
-          .cloned()
-          .unwrap_or_else(|| name.clone());
+        let resolved = entity_map.get(&name).cloned().unwrap_or_else(|| name.clone());
         match current_tag.as_str() {
-          "pos" => pos_list.push(resolved),
-          "misc" => misc_list.push(resolved),
+          "pos" if in_sense => pos_list.push(resolved),
+          "misc" if in_sense => misc_list.push(resolved),
+          "ke_inf" if in_k_ele => current_ke_inf.push(resolved),
+          "re_inf" if in_r_ele => current_re_inf.push(resolved),
           _ => {}
         }
       }
@@ -181,7 +236,7 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
   eprintln!("  Rebuilding FTS index...");
   tx.execute("INSERT INTO glosses_fts(glosses_fts) VALUES('rebuild')", [])?;
   tx.commit()?;
-  conn.execute_batch("PRAGMA journal_mode=DELETE;")?;
+  conn.execute_batch("PRAGMA journal_mode=DELETE; VACUUM;")?;
 
   eprintln!("  {} entries total", entry_count);
   Ok(())
@@ -215,4 +270,3 @@ fn parse_jmdict_entities(xml_path: &str) -> Result<HashMap<String, String>> {
   eprintln!("  Parsed {} entity definitions", entities.len());
   Ok(entities)
 }
-

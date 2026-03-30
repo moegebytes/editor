@@ -401,7 +401,7 @@
           class:row-find-current={findQuery && currentFindMatch >= 0 && findMatchIndices[currentFindMatch] === entry.index}
           style:position="absolute"
           style:top="{row.start}px"
-          style:height={expandedNotes === entry.index ? "auto" : `${ROW_HEIGHT}px`}
+          style:height={expandedNotes === entry.index || (isText(entry) && entry.index === selectedIndex) ? "auto" : `${ROW_HEIGHT}px`}
           style:min-height="{ROW_HEIGHT}px"
           style:left="0"
           style:right="0"
@@ -443,6 +443,7 @@
             </button>
             <div
               class="cell col-jp"
+              class:col-jp-wrap={entry.index === selectedIndex}
               style:padding-left={depthPadding(entry.depth)}
               onmouseup={handleJpMouseUp}
             >
@@ -607,6 +608,13 @@
     flex: 4;
     min-width: 0;
     user-select: text;
+
+    &.col-jp-wrap {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      word-break: break-word;
+    }
   }
 
   .col-en {
