@@ -16,12 +16,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
-            bundles: appimage,deb,rpm
+            bundles: appimage,deb
             artifact: x86_64-linux
             paths: |
               src-tauri/target/release/bundle/appimage/*.AppImage
               src-tauri/target/release/bundle/deb/*.deb
-              src-tauri/target/release/bundle/rpm/*.rpm
           - os: windows-2022
             bundles: nsis
             artifact: x86_64-windows

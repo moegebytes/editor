@@ -18,14 +18,6 @@
       "icons/icon.ico",
       "icons/icon.png"
     ],
-    "linux": {
-      "rpm": {
-        "compression": {
-          "type": "zstd",
-          "level": 3
-        }
-      }
-    },
     "resources": {
       "../resources/gen/jmdict.sqlite": "resources/jmdict.sqlite",
       "../resources/gen/kanjidic2.sqlite": "resources/kanjidic2.sqlite",

@@ -21,6 +21,8 @@ offline Wiktionary lookup.
 ```
 editor/
 ├── CLAUDE.md
+├── README.md
+├── LICENSE
 ├── package.json
 ├── index.html
 ├── vite.config.js

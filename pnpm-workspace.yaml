@@ -5,7 +5,4 @@ blockExoticSubdeps: true
 dedupePeers: true
 
 onlyBuiltDependencies:
-  - classic-level
   - esbuild
-ignoredBuiltDependencies:
-  - core-js
