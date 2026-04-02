@@ -7,31 +7,22 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum StringsError {
   #[error("{}", crate::util::friendly_io_msg("", path, source))]
-  Io {
-    path: PathBuf,
-    source: std::io::Error,
-  },
+  Io { path: PathBuf, source: std::io::Error },
 
   #[error("{}", crate::util::friendly_io_msg("", path, source))]
-  ResolvePath {
-    path: PathBuf,
-    source: std::io::Error,
-  },
+  ResolvePath { path: PathBuf, source: std::io::Error },
 
   #[error("circular include detected: {from} includes {to}")]
-  CircularInclude {
-    from: PathBuf,
-    to: PathBuf,
-  },
+  CircularInclude { from: PathBuf, to: PathBuf },
+
+  #[error("include path escapes project directory: '{path}'")]
+  PathTraversal { path: PathBuf },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StringsEntry {
   Comment(String),
-  Include {
-    path: String,
-    entries: Vec<StringsEntry>,
-  },
+  Include { path: String, entries: Vec<StringsEntry> },
   Reference(String),
   Emit(String),
   Blank,
@@ -44,11 +35,16 @@ pub fn parse_strings(path: &Path) -> Result<Vec<StringsEntry>, StringsError> {
     path: path.to_path_buf(),
     source: e,
   })?;
+  let root = canonical.parent().unwrap_or(Path::new(".")).to_path_buf();
   visited.insert(canonical.clone());
-  parse_strings_inner(&canonical, &mut visited)
+  parse_strings_inner(&canonical, &root, &mut visited)
 }
 
-fn parse_strings_inner(path: &Path, visited: &mut HashSet<PathBuf>) -> Result<Vec<StringsEntry>, StringsError> {
+fn parse_strings_inner(
+  path: &Path,
+  root: &Path,
+  visited: &mut HashSet<PathBuf>,
+) -> Result<Vec<StringsEntry>, StringsError> {
   let content = std::fs::read_to_string(path).map_err(|e| StringsError::Io {
     path: path.to_path_buf(),
     source: e,
@@ -71,13 +67,14 @@ fn parse_strings_inner(path: &Path, visited: &mut HashSet<PathBuf>) -> Result<Ve
       };
 
       let resolved = parent.join(include_path);
-      let canonical =
-        resolved
-          .canonicalize()
-          .map_err(|e| StringsError::ResolvePath {
-            path: resolved.clone(),
-            source: e,
-          })?;
+      let canonical = resolved.canonicalize().map_err(|e| StringsError::ResolvePath {
+        path: resolved.clone(),
+        source: e,
+      })?;
+
+      if !canonical.starts_with(root) {
+        return Err(StringsError::PathTraversal { path: canonical });
+      }
 
       if !visited.insert(canonical.clone()) {
         return Err(StringsError::CircularInclude {
@@ -86,7 +83,7 @@ fn parse_strings_inner(path: &Path, visited: &mut HashSet<PathBuf>) -> Result<Ve
         });
       }
 
-      let sub_entries = parse_strings_inner(&canonical, visited)?;
+      let sub_entries = parse_strings_inner(&canonical, root, visited)?;
       visited.remove(&canonical);
 
       entries.push(StringsEntry::Include {
@@ -118,7 +115,10 @@ pub fn write_strings(entries: &[StringsEntry], path: &Path) -> Result<(), String
   for entry in entries {
     match entry {
       StringsEntry::Comment(s) => lines.push(s.clone()),
-      StringsEntry::Include { path: inc_path, entries: sub_entries } => {
+      StringsEntry::Include {
+        path: inc_path,
+        entries: sub_entries,
+      } => {
         lines.push(format!("#include <{}>", inc_path));
         let resolved = parent.join(inc_path);
         write_strings(sub_entries, &resolved)?;
@@ -168,10 +168,7 @@ mod tests {
     let entries = parse_strings(&path).unwrap();
 
     assert_eq!(entries.len(), 3);
-    assert_eq!(
-      entries[0],
-      StringsEntry::Comment("; This is a comment".to_string())
-    );
+    assert_eq!(entries[0], StringsEntry::Comment("; This is a comment".to_string()));
     assert_eq!(entries[1], StringsEntry::Blank);
     assert_eq!(entries[2], StringsEntry::Text("Hello".to_string()));
   }
@@ -190,15 +187,15 @@ mod tests {
   fn parse_include() {
     let dir = tempfile::tempdir().unwrap();
     write_temp_file(dir.path(), "included.txt", "Included line");
-    let path = write_temp_file(
-      dir.path(),
-      "main.txt",
-      "Before\n#include <included.txt>\nAfter",
-    );
+    let path = write_temp_file(dir.path(), "main.txt", "Before\n#include <included.txt>\nAfter");
     let entries = parse_strings(&path).unwrap();
 
     assert_eq!(entries.len(), 3);
-    if let StringsEntry::Include { path: inc_path, entries: sub } = &entries[1] {
+    if let StringsEntry::Include {
+      path: inc_path,
+      entries: sub,
+    } = &entries[1]
+    {
       assert_eq!(inc_path, "included.txt");
       assert_eq!(sub.len(), 1);
       assert_eq!(sub[0], StringsEntry::Text("Included line".to_string()));
@@ -261,13 +258,45 @@ mod tests {
   #[test]
   fn parse_reference() {
     let dir = tempfile::tempdir().unwrap();
-    let path = write_temp_file(
-      dir.path(), "references.txt",
-      "First\n#reference <referenced.txt>\nLast",
-    );
+    let path = write_temp_file(dir.path(), "references.txt", "First\n#reference <referenced.txt>\nLast");
     let entries = parse_strings(&path).unwrap();
 
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[1], StringsEntry::Reference("referenced.txt".to_string()));
+  }
+
+  #[test]
+  fn reject_path_traversal() {
+    let dir = tempfile::tempdir().unwrap();
+    let parent = dir.path().parent().unwrap();
+    write_temp_file(parent, "secret.txt", "sensitive data");
+    let path = write_temp_file(dir.path(), "evil.txt", "#include <../secret.txt>");
+    let result = parse_strings(&path);
+
+    assert!(result.is_err());
+    let err_msg = format!("{}", result.unwrap_err());
+    assert!(
+      err_msg.contains("escapes project directory"),
+      "error should mention path traversal: {}",
+      err_msg
+    );
+  }
+
+  #[test]
+  fn allow_subdirectory_include() {
+    let dir = tempfile::tempdir().unwrap();
+    let sub = dir.path().join("sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    write_temp_file(&sub, "child.txt", "Nested content");
+    let path = write_temp_file(dir.path(), "main.txt", "#include <sub/child.txt>");
+    let entries = parse_strings(&path).unwrap();
+
+    assert_eq!(entries.len(), 1);
+    if let StringsEntry::Include { entries: sub, .. } = &entries[0] {
+      assert_eq!(sub.len(), 1);
+      assert_eq!(sub[0], StringsEntry::Text("Nested content".to_string()));
+    } else {
+      panic!("expected Include entry");
+    }
   }
 }

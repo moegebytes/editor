@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { ProjectFiles, ProjectSettings } from "../lib/types";
-  import { ArrowLeftIcon, SaveIcon } from "@lucide/svelte";
+  import type { ProjectFiles, ProjectSettings } from '../lib/types';
+  import { ArrowLeftIcon, SaveIcon } from '@lucide/svelte';
 
   let {
     projectName,
@@ -16,9 +16,9 @@
     onSave: (name: string, settings: ProjectSettings) => void;
   } = $props();
 
-  let nameInput = $state("");
+  let nameInput = $state('');
   let draft: ProjectSettings = $state({ autoConfirmOnEnter: false });
-  let activeTab: "project" | "editor" = $state("project");
+  let activeTab: 'project' | 'editor' = $state('project');
 
   $effect(() => {
     nameInput = projectName;
@@ -54,52 +54,42 @@
   <div class="settings-body">
     <h1>Settings</h1>
     <div class="tabs-layout">
-    <div class="tabs">
-      <button
-        class="tab"
-        class:tab-active={activeTab === "project"}
-        onclick={() => (activeTab = "project")}
-      >
-        Project
-      </button>
-      <button
-        class="tab"
-        class:tab-active={activeTab === "editor"}
-        onclick={() => (activeTab = "editor")}
-      >
-        Editor
-      </button>
-    </div>
+      <div class="tabs">
+        <button class="tab" class:tab-active={activeTab === 'project'} onclick={() => (activeTab = 'project')}>
+          Project
+        </button>
+        <button class="tab" class:tab-active={activeTab === 'editor'} onclick={() => (activeTab = 'editor')}>
+          Editor
+        </button>
+      </div>
 
-    <div class="tab-content">
-      {#if activeTab === "project"}
-        <div class="field-row">
-          <label class="field-label" for="project-name">Project Name</label>
-          <input id="project-name" type="text" bind:value={nameInput} class="field-input" />
-        </div>
-        <div class="field-row">
-          <span class="field-label">Japanese File</span>
-          <span class="field-path text-ellipsis" title={files.jp}>{files.jp}</span>
-        </div>
-        <div class="field-row">
-          <span class="field-label">English File</span>
-          <span class="field-path text-ellipsis" title={files.en}>{files.en}</span>
-        </div>
-        <p class="field-hint">
-          To change file paths, close the project and edit it from the home screen.
-        </p>
-      {:else}
-        <label class="check-row">
-          <input type="checkbox" bind:checked={draft.autoConfirmOnEnter} />
-          <span class="check-text">
-            <span class="check-label">Auto-confirm on Enter</span>
-            <span class="check-hint">
-              Pressing Enter to move to the next line will also mark the current line as confirmed.
+      <div class="tab-content">
+        {#if activeTab === 'project'}
+          <div class="field-row">
+            <label class="field-label" for="project-name">Project Name</label>
+            <input id="project-name" type="text" bind:value={nameInput} class="field-input" />
+          </div>
+          <div class="field-row">
+            <span class="field-label">Japanese File</span>
+            <span class="field-path text-ellipsis" title={files.jp}>{files.jp}</span>
+          </div>
+          <div class="field-row">
+            <span class="field-label">English File</span>
+            <span class="field-path text-ellipsis" title={files.en}>{files.en}</span>
+          </div>
+          <p class="field-hint">To change file paths, close the project and edit it from the home screen.</p>
+        {:else}
+          <label class="check-row">
+            <input type="checkbox" bind:checked={draft.autoConfirmOnEnter} />
+            <span class="check-text">
+              <span class="check-label">Auto-confirm on Enter</span>
+              <span class="check-hint">
+                Pressing Enter to move to the next line will also mark the current line as confirmed.
+              </span>
             </span>
-          </span>
-        </label>
-      {/if}
-    </div>
+          </label>
+        {/if}
+      </div>
     </div>
   </div>
 </div>
@@ -187,7 +177,10 @@
     color: var(--color-text-muted);
     cursor: pointer;
     text-align: left;
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s,
+      background 0.15s;
 
     &:hover {
       color: var(--color-text);
@@ -259,7 +252,7 @@
     cursor: pointer;
     user-select: none;
 
-    input[type="checkbox"] {
+    input[type='checkbox'] {
       width: 16px;
       height: 16px;
       accent-color: var(--color-accent);

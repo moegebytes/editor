@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Dialog from "./ui/Dialog.svelte";
-  import { ChevronDownIcon, ChevronRightIcon } from "@lucide/svelte";
-  import { getEnvironmentInfo } from "../lib/ipc";
-  import type { EnvironmentInfo } from "../lib/types";
+  import Dialog from './ui/Dialog.svelte';
+  import { ChevronDownIcon, ChevronRightIcon } from '@lucide/svelte';
+  import { getEnvironmentInfo } from '../lib/ipc';
+  import type { EnvironmentInfo } from '../lib/types';
 
   let {
     visible = $bindable(false),
@@ -27,28 +27,32 @@
   });
 
   let detailsText = $derived.by(() => {
-    if (!envInfo) return envError ?? "Loading...";
+    if (!envInfo) return envError ?? 'Loading...';
     const lines: string[] = [
       `App: ${envInfo.appName} ${envInfo.appVersion}`,
       `Tauri: ${envInfo.tauriVersion}`,
       `Platform: ${envInfo.os} (${envInfo.arch})`,
-      `Variant: ${envInfo.debug ? "debug" : "release"}`,
+      `Variant: ${envInfo.debug ? 'debug' : 'release'}`,
     ];
     if (projectName) {
-      lines.push("");
+      lines.push('');
       lines.push(`Project: ${projectName}`);
       if (stats) {
         lines.push(`Entries: ${stats.totalText} total, ${stats.translated} translated, ${stats.confirmed} confirmed`);
       }
     } else {
-      lines.push("");
-      lines.push("Project: (none)");
+      lines.push('');
+      lines.push('Project: (none)');
     }
-    return lines.join("\n");
+    return lines.join('\n');
   });
 
   let copied = $state(false);
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    return () => clearTimeout(copyTimer);
+  });
 
   function handleCopy() {
     navigator.clipboard.writeText(detailsText);
@@ -60,8 +64,8 @@
 
 <Dialog title="About" bind:visible>
   <div class="about-content">
-    <h3 class="app-title">{envInfo?.appName ?? "Yona"}</h3>
-    <p class="app-version">Version {envInfo?.appVersion ?? "..."}</p>
+    <h3 class="app-title">{envInfo?.appName ?? 'Yona'}</h3>
+    <p class="app-version">Version {envInfo?.appVersion ?? '...'}</p>
     <p class="app-description">Desktop editor for translating Visual Novel script files.</p>
 
     <div class="credits">
@@ -99,7 +103,7 @@
         <div class="details-body">
           <pre>{detailsText}</pre>
           <button class="copy-btn" class:copied onclick={handleCopy}>
-            {copied ? "Copied!" : "Copy"}
+            {copied ? 'Copied!' : 'Copy'}
           </button>
         </div>
       {/if}

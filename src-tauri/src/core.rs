@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::strings::StringsEntry;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -163,9 +163,7 @@ pub fn pair_files(jp_entries: &[StringsEntry], en_entries: &[StringsEntry]) -> V
       .and_then(|r| r.source_file.clone())
       .or_else(|| en.and_then(|r| r.source_file.clone()));
 
-    let depth = jp
-      .map(|r| r.depth)
-      .unwrap_or_else(|| en.map(|r| r.depth).unwrap_or(0));
+    let depth = jp.map(|r| r.depth).unwrap_or_else(|| en.map(|r| r.depth).unwrap_or(0));
 
     // Prefer EN side, fall back to JP side
     let notes = en
@@ -340,16 +338,8 @@ mod tests {
 
   #[test]
   fn notes_round_trip() {
-    let en = vec![
-      comment("; Note about choice"),
-      text("Test"),
-      StringsEntry::Blank,
-    ];
-    let jp = vec![
-      comment("; Note about choice"),
-      text("テスト"),
-      StringsEntry::Blank,
-    ];
+    let en = vec![comment("; Note about choice"), text("Test"), StringsEntry::Blank];
+    let jp = vec![comment("; Note about choice"), text("テスト"), StringsEntry::Blank];
     let paired = pair_files(&jp, &en);
 
     assert_eq!(paired[0].entry_type, EntryType::Text);
@@ -374,10 +364,7 @@ mod tests {
     assert_eq!(en_saved.len(), 3); // comment + text + text
     assert_eq!(en_saved[0], StringsEntry::Comment("; Editor note".to_string()));
     assert_eq!(en_saved[1], StringsEntry::Text("Test".to_string()));
-    assert_eq!(
-      en_saved[2],
-      StringsEntry::Text("Second line".to_string())
-    );
+    assert_eq!(en_saved[2], StringsEntry::Text("Second line".to_string()));
 
     let re_paired = pair_files(&jp_original, &en_saved);
     assert_eq!(re_paired.len(), 2);
@@ -398,7 +385,7 @@ mod tests {
 
     let reconstructed = reconstruct_entries(&paired);
     assert_eq!(reconstructed.len(), 3);
-    assert_eq!(reconstructed[0],StringsEntry::Comment("; New note".to_string()));
+    assert_eq!(reconstructed[0], StringsEntry::Comment("; New note".to_string()));
     assert_eq!(reconstructed[1], StringsEntry::Comment("; Another note".to_string()));
     assert_eq!(reconstructed[2], StringsEntry::Text("Test".to_string()));
   }

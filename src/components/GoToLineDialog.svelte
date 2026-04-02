@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Dialog from "./ui/Dialog.svelte";
+  import Dialog from './ui/Dialog.svelte';
 
   let {
     visible = $bindable(false),
@@ -11,14 +11,14 @@
     onGo: (line: number) => void;
   } = $props();
 
-  let input = $state("");
+  let input = $state('');
   let inputEl: HTMLInputElement | undefined = $state();
-  let error = $state("");
+  let error = $state('');
 
   $effect(() => {
     if (visible) {
-      input = "";
-      error = "";
+      input = '';
+      error = '';
       requestAnimationFrame(() => inputEl?.focus());
     }
   });
@@ -41,7 +41,9 @@
       bind:this={inputEl}
       bind:value={input}
       placeholder="Line number (1–{maxLine})"
-      onkeydown={(e) => { if (e.key === "Enter") submit(); }}
+      onkeydown={(e) => {
+        if (e.key === 'Enter') submit();
+      }}
     />
   </div>
   {#if error}

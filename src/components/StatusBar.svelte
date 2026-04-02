@@ -1,17 +1,17 @@
 <script lang="ts">
-  let {modified, saving, stats}: {
+  let {
+    modified,
+    saving,
+    stats,
+  }: {
     modified: boolean;
     saving: boolean;
     stats: { totalText: number; translated: number; confirmed: number };
   } = $props();
 
-  let confirmedPct = $derived(
-    stats.totalText > 0 ? Math.round((stats.confirmed / stats.totalText) * 100) : 0,
-  );
+  let confirmedPct = $derived(stats.totalText > 0 ? Math.round((stats.confirmed / stats.totalText) * 100) : 0);
 
-  let translatedPct = $derived(
-    stats.totalText > 0 ? Math.round((stats.translated / stats.totalText) * 100) : 0,
-  );
+  let translatedPct = $derived(stats.totalText > 0 ? Math.round((stats.translated / stats.totalText) * 100) : 0);
 </script>
 
 <div class="status-bar">

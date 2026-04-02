@@ -24,13 +24,21 @@ function add(message: string, type: ToastType, duration: number) {
 }
 
 function dismiss(id: number) {
-  toasts = toasts.filter(t => t.id !== id);
+  toasts = toasts.filter((t) => t.id !== id);
 }
 
 export const toast = {
-  get all(): Toast[] { return toasts; },
-  error(message: string) { add(message, 'error', 0); },
-  success(message: string) { add(message, 'success', 4000); },
-  info(message: string) { add(message, 'info', 4000); },
+  get all(): Toast[] {
+    return toasts;
+  },
+  error(message: string) {
+    add(message, 'error', 0);
+  },
+  success(message: string) {
+    add(message, 'success', 4000);
+  },
+  info(message: string) {
+    add(message, 'info', 4000);
+  },
   dismiss,
 };

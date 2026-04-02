@@ -3,6 +3,6 @@ name = "build-kanjidic"
 edition = "2021"
 
 [dependencies]
-rusqlite = { version = "=0.35.0", features = ["bundled"] }
+rusqlite = { version = "=0.37.0", features = ["bundled"] }
 quick-xml = "=0.38.4"
 anyhow = "=1.0.102"

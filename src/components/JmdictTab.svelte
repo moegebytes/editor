@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { DictEntry, Inflection, KanjiForm, ReadingForm } from "../lib/types";
-  import { lookupJmdict } from "../lib/ipc";
-  import { isKanji } from "../lib/utils";
-  import KanjiDetail from "./KanjiDetail.svelte";
+  import type { DictEntry, Inflection } from '../lib/types';
+  import { lookupJmdict } from '../lib/ipc';
+  import { isKanji } from '../lib/utils';
+  import KanjiDetail from './KanjiDetail.svelte';
 
   let {
     onNavigate,
@@ -102,10 +102,7 @@
     <div class="inflection-text">
       <span class="inflection-surface">{inf.surface}</span>
       could be an inflection of
-      <button
-        class="btn-icon inflection-base"
-        onclick={() => navigateToBaseForm(inf.baseForm)}
-      >{inf.baseForm}</button>
+      <button class="btn-icon inflection-base" onclick={() => navigateToBaseForm(inf.baseForm)}>{inf.baseForm}</button>
     </div>
     <div class="inflection-form">
       <span class="inflection-form-name">{inf.formName}.</span>
@@ -122,12 +119,9 @@
       <div class="entry-headword">
         {#if entry.kanji.length > 0}
           <span class="kanji-text">
-            {#each entry.kanji[0].text.split("") as ch}
+            {#each entry.kanji[0].text.split('') as ch}
               {#if isKanji(ch)}
-                <button
-                  class="btn-icon kanji-link"
-                  onclick={() => kanjiDetailRef?.lookup(ch)}
-                >{ch}</button>
+                <button class="btn-icon kanji-link" onclick={() => kanjiDetailRef?.lookup(ch)}>{ch}</button>
               {:else}
                 {ch}
               {/if}
@@ -135,7 +129,7 @@
           </span>
         {/if}
         <span class="reading-text">
-          {entry.readings.map((r) => r.text).join("\u3001")}
+          {entry.readings.map((r) => r.text).join('\u3001')}
         </span>
       </div>
 
@@ -143,26 +137,24 @@
         <div class="sense">
           {#if sense.pos.length > 0}
             <span class="pos-tags">
-              {sense.pos.join(", ")}
+              {sense.pos.join(', ')}
             </span>
           {/if}
           <span class="sense-num">{i + 1}.</span>
-          {sense.glosses.join("; ")}
+          {sense.glosses.join('; ')}
           {#if sense.misc.length > 0}
             <span class="misc-tags">
-              ({sense.misc.join(", ")})
+              ({sense.misc.join(', ')})
             </span>
           {/if}
           {#if sense.xrefs.length > 0}
             <div class="xrefs">
               See also:
               {#each sense.xrefs as xref, xi}
-                {@const term = xref.split("\u30FB")[0]}
-                {#if xi > 0}, {/if}
-                <button
-                  class="btn-icon xref-link"
-                  onclick={() => onNavigate?.(term)}
-                >{xref}</button>
+                {@const term = xref.split('\u30FB')[0]}
+                {#if xi > 0},
+                {/if}
+                <button class="btn-icon xref-link" onclick={() => onNavigate?.(term)}>{xref}</button>
               {/each}
             </div>
           {/if}
@@ -186,7 +178,7 @@
       {#if notes.length > 0}
         <div class="entry-notes">
           <span class="entry-notes-label">Notes</span>
-          {notes.join(" ")}
+          {notes.join(' ')}
         </div>
       {/if}
     </div>

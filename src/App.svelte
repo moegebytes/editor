@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { FlatEntry, ProjectFiles, ProjectSettings } from "./lib/types";
-  import { isText, isUntranslated, isTranslated } from "./lib/utils";
+  import type { FlatEntry, ProjectFiles, ProjectSettings } from './lib/types';
+  import { isText, isUntranslated, isTranslated } from './lib/utils';
   import {
     confirmLine,
     createProject,
@@ -12,27 +12,28 @@
     saveTranslation,
     saveProject,
     unconfirmLine,
-  } from "./lib/ipc";
-  import Toolbar from "./components/Toolbar.svelte";
-  import EditorTable from "./components/EditorTable.svelte";
-  import FindReplaceBar from "./components/FindReplaceBar.svelte";
-  import DictionaryPanel from "./components/DictionaryPanel.svelte";
-  import StatusBar from "./components/StatusBar.svelte";
-  import ProjectHome from "./components/ProjectHome.svelte";
-  import ContextMenu from "./components/ui/ContextMenu.svelte";
-  import SettingsView from "./components/SettingsView.svelte";
-  import GoToLineDialog from "./components/GoToLineDialog.svelte";
-  import AboutDialog from "./components/AboutDialog.svelte";
-  import UnsavedChangesDialog from "./components/UnsavedChangesDialog.svelte";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { toast } from "./lib/toast.svelte";
-  import ToastContainer from "./components/ui/ToastContainer.svelte";
+  } from './lib/ipc';
+  import Toolbar from './components/Toolbar.svelte';
+  import EditorTable from './components/EditorTable.svelte';
+  import FindReplaceBar from './components/FindReplaceBar.svelte';
+  import DictionaryPanel from './components/DictionaryPanel.svelte';
+  import StatusBar from './components/StatusBar.svelte';
+  import ProjectHome from './components/ProjectHome.svelte';
+  import ContextMenu from './components/ui/ContextMenu.svelte';
+  import SettingsView from './components/SettingsView.svelte';
+  import GoToLineDialog from './components/GoToLineDialog.svelte';
+  import AboutDialog from './components/AboutDialog.svelte';
+  import UnsavedChangesDialog from './components/UnsavedChangesDialog.svelte';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { toast } from './lib/toast.svelte';
+  import { SvelteSet } from 'svelte/reactivity';
+  import ToastContainer from './components/ui/ToastContainer.svelte';
 
   // Project state
   let projectId: string | null = $state(null);
   let projectName: string | null = $state(null);
-  let projectFiles: ProjectFiles = $state({ jp: "", en: "" });
-  let confirmedLines: Set<number> = $state(new Set());
+  let projectFiles: ProjectFiles = $state({ jp: '', en: '' });
+  let confirmedLines = new SvelteSet<number>();
   let projectSettings: ProjectSettings = $state({ autoConfirmOnEnter: false });
   let settingsVisible = $state(false);
   let goToLineVisible = $state(false);
@@ -47,12 +48,12 @@
 
   // Dictionary state
   let dictVisible = $state(false);
-  let dictQuery = $state("");
+  let dictQuery = $state('');
 
   // Filter state
-  let filterText = $state("");
+  let filterText = $state('');
   let findReplaceVisible = $state(false);
-  let findQuery = $state("");
+  let findQuery = $state('');
   let findMatchIndices: number[] = $state([]);
   let currentFindMatch = $state(-1);
   let toolbarRef: Toolbar = $state() as Toolbar;
@@ -87,18 +88,17 @@
   let stats = $derived({
     totalText: entries.filter(isText).length,
     translated: entries.filter(isTranslated).length,
-    confirmed: entries.filter(
-      (e) => isText(e) && confirmedLines.has(e.index),
-    ).length,
+    confirmed: entries.filter((e) => isText(e) && confirmedLines.has(e.index)).length,
   });
 
   let hasProject = $derived(projectName !== null);
 
-  function applyProject(proj: import("./lib/types").Project) {
+  function applyProject(proj: import('./lib/types').Project) {
     projectId = proj.id;
     projectName = proj.name;
     projectFiles = proj.files;
-    confirmedLines = new Set(proj.confirmedLines);
+    confirmedLines.clear();
+    for (const i of proj.confirmedLines) confirmedLines.add(i);
     projectSettings = proj.settings;
     entries = proj.entries;
     modified = false;
@@ -143,7 +143,7 @@
       await updateProject(projectId, name, projectFiles, settings);
       projectName = name;
       projectSettings = settings;
-      toast.success("Settings saved");
+      toast.success('Settings saved');
     } catch (e) {
       toast.error(`Failed to save settings: ${e}`);
     }
@@ -156,7 +156,7 @@
       await saveTranslation(entries);
       await saveProject();
       modified = false;
-      toast.success("Project saved");
+      toast.success('Project saved');
     } catch (e) {
       toast.error(`Failed to save: ${e}`);
     } finally {
@@ -169,7 +169,7 @@
     if (!path) return;
     try {
       await exportProject(path);
-      toast.success("Project exported");
+      toast.success('Project exported');
     } catch (e) {
       toast.error(`Failed to export: ${e}`);
     }
@@ -216,15 +216,25 @@
   }
 
   async function handleToggleConfirm(index: number) {
-    const next = new Set(confirmedLines);
-    if (next.has(index)) {
-      next.delete(index);
-      await unconfirmLine(index);
+    if (confirmedLines.has(index)) {
+      confirmedLines.delete(index);
+      try {
+        await unconfirmLine(index);
+      } catch (e) {
+        confirmedLines.add(index);
+        toast.error(`Failed to unconfirm line: ${e}`);
+        return;
+      }
     } else {
-      next.add(index);
-      await confirmLine(index);
+      confirmedLines.add(index);
+      try {
+        await confirmLine(index);
+      } catch (e) {
+        confirmedLines.delete(index);
+        toast.error(`Failed to confirm line: ${e}`);
+        return;
+      }
     }
-    confirmedLines = next;
     modified = true;
   }
 
@@ -239,15 +249,15 @@
   function doCloseProject() {
     projectId = null;
     projectName = null;
-    projectFiles = { jp: "", en: "" };
+    projectFiles = { jp: '', en: '' };
     entries = [];
-    confirmedLines = new Set();
+    confirmedLines.clear();
     projectSettings = { autoConfirmOnEnter: false };
     modified = false;
     selectedIndex = -1;
-    filterText = "";
+    filterText = '';
     findReplaceVisible = false;
-    findQuery = "";
+    findQuery = '';
     findMatchIndices = [];
     currentFindMatch = -1;
   }
@@ -283,11 +293,11 @@
     for (const entry of entries) {
       if (!isText(entry)) continue;
       if (fLower) {
-        const jp = (entry.jpText ?? "").toLowerCase();
-        const en = (entry.enText ?? "").toLowerCase();
+        const jp = (entry.jpText ?? '').toLowerCase();
+        const en = (entry.enText ?? '').toLowerCase();
         if (!jp.includes(fLower) && !en.includes(fLower)) continue;
       }
-      const en = (entry.enText ?? "").toLowerCase();
+      const en = (entry.enText ?? '').toLowerCase();
       if (en.includes(lower)) matches.push(entry.index);
     }
     findMatchIndices = matches;
@@ -324,9 +334,9 @@
     const lower = query.toLowerCase();
     let count = 0;
     for (const entry of entries) {
-      if (entry.entryType !== "text" || !entry.enText) continue;
+      if (entry.entryType !== 'text' || !entry.enText) continue;
       const en = entry.enText;
-      let result = "";
+      let result = '';
       let i = 0;
       const enLower = en.toLowerCase();
       while (i < en.length) {
@@ -346,22 +356,22 @@
   }
 
   function handleKeydownGlobal(e: KeyboardEvent) {
-    if (e.ctrlKey && e.key === "f") {
+    if (e.ctrlKey && e.key === 'f') {
       e.preventDefault();
       toolbarRef?.focusFilter();
       return;
     }
-    if (e.ctrlKey && e.key === "h") {
+    if (e.ctrlKey && e.key === 'h') {
       e.preventDefault();
       findReplaceVisible = !findReplaceVisible;
       return;
     }
-    if (e.ctrlKey && e.key === "d") {
+    if (e.ctrlKey && e.key === 'd') {
       e.preventDefault();
       dictVisible = !dictVisible;
       return;
     }
-    if (e.ctrlKey && e.key === "g") {
+    if (e.ctrlKey && e.key === 'g') {
       e.preventDefault();
       goToLineVisible = true;
       return;
@@ -388,7 +398,7 @@
     />
   {:else if settingsVisible}
     <SettingsView
-      projectName={projectName ?? ""}
+      projectName={projectName ?? ''}
       files={projectFiles}
       bind:settings={projectSettings}
       onBack={() => (settingsVisible = false)}
@@ -414,11 +424,7 @@
     />
 
     <div class="main-area">
-      <DictionaryPanel
-        query={dictQuery}
-        querySeq={dictQuerySeq}
-        bind:visible={dictVisible}
-      />
+      <DictionaryPanel query={dictQuery} querySeq={dictQuerySeq} bind:visible={dictVisible} />
 
       <div class="editor-area">
         <EditorTable
@@ -458,23 +464,11 @@
 <ContextMenu />
 <ToastContainer />
 
-<GoToLineDialog
-  bind:visible={goToLineVisible}
-  maxLine={entries.length}
-  onGo={handleGoToLine}
-/>
+<GoToLineDialog bind:visible={goToLineVisible} maxLine={entries.length} onGo={handleGoToLine} />
 
-<AboutDialog
-  bind:visible={aboutVisible}
-  {projectName}
-  stats={hasProject ? stats : null}
-/>
+<AboutDialog bind:visible={aboutVisible} {projectName} stats={hasProject ? stats : null} />
 
-<UnsavedChangesDialog
-  bind:visible={unsavedDialogVisible}
-  onSave={handleUnsavedSave}
-  onDiscard={handleUnsavedDiscard}
-/>
+<UnsavedChangesDialog bind:visible={unsavedDialogVisible} onSave={handleUnsavedSave} onDiscard={handleUnsavedDiscard} />
 
 <style>
   .app {

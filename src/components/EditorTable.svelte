@@ -1,16 +1,11 @@
 <script lang="ts">
-  import { tick } from "svelte";
-  import { createVirtualizer } from "@tanstack/svelte-virtual";
-  import {
-    StickyNoteIcon,
-    PlusIcon,
-    ChevronRightIcon,
-    ChevronDownIcon,
-    ArrowRightIcon,
-  } from "@lucide/svelte";
-  import type { FlatEntry } from "../lib/types";
-  import { isText, isUntranslated, toggleSetMember, getFileName } from "../lib/utils";
-  import UnsavedChangesDialog from "./UnsavedChangesDialog.svelte";
+  import { tick } from 'svelte';
+  import { createVirtualizer } from '@tanstack/svelte-virtual';
+  import { StickyNoteIcon, PlusIcon, ChevronRightIcon, ChevronDownIcon, ArrowRightIcon } from '@lucide/svelte';
+  import type { FlatEntry } from '../lib/types';
+  import { isText, isUntranslated, getFileName } from '../lib/utils';
+  import { SvelteSet } from 'svelte/reactivity';
+  import UnsavedChangesDialog from './UnsavedChangesDialog.svelte';
 
   let {
     entries,
@@ -23,8 +18,8 @@
     onJumpNextUnconfirmed,
     confirmedLines = new Set(),
     autoConfirmOnEnter = false,
-    filterText = "",
-    findQuery = "",
+    filterText = '',
+    findQuery = '',
     findMatchIndices = [],
     currentFindMatch = -1,
   }: {
@@ -45,19 +40,18 @@
   } = $props();
 
   let scrollElement: HTMLDivElement | undefined = $state();
-  let collapsedIncludes: Set<number> = $state(new Set());
+  let collapsedIncludes = new SvelteSet<number>();
   let expandedNotes: number | null = $state(null);
-  let notesDraft: string = $state("");
+  let notesDraft: string = $state('');
 
   const ROW_HEIGHT = 32;
 
   let filterLower = $derived(filterText.toLowerCase());
 
   // Pre-compute set of include filenames for reference validation
-  let includeNames = $derived(new Set(
-    entries.filter((e) => e.entryType === "include")
-      .map((e) => getFileName(e.jpText ?? e.enText ?? ""))
-  ));
+  let includeNames = $derived(
+    new Set(entries.filter((e) => e.entryType === 'include').map((e) => getFileName(e.jpText ?? e.enText ?? ''))),
+  );
 
   let visibleEntries = $derived.by(() => {
     const result: FlatEntry[] = [];
@@ -69,18 +63,18 @@
         skipUntilDepth = -1;
       }
 
-      if (entry.entryType === "emit" || entry.entryType === "blank") continue;
-      if (entry.entryType === "reference" && filterLower) continue;
+      if (entry.entryType === 'emit' || entry.entryType === 'blank') continue;
+      if (entry.entryType === 'reference' && filterLower) continue;
 
       if (filterLower && isText(entry)) {
-        const jp = (entry.jpText ?? "").toLowerCase();
-        const en = (entry.enText ?? "").toLowerCase();
+        const jp = (entry.jpText ?? '').toLowerCase();
+        const en = (entry.enText ?? '').toLowerCase();
         if (!jp.includes(filterLower) && !en.includes(filterLower)) continue;
       }
 
       result.push(entry);
 
-      if (entry.entryType === "include" && collapsedIncludes.has(entry.index)) {
+      if (entry.entryType === 'include' && collapsedIncludes.has(entry.index)) {
         skipUntilDepth = entry.depth;
       }
     }
@@ -95,12 +89,10 @@
       lastScrolledTo = selectedIndex;
       const visIdx = visibleEntries.findIndex((e) => e.index === selectedIndex);
       if (visIdx >= 0) {
-        $virtualizer.scrollToIndex(visIdx, { align: "auto" });
+        $virtualizer.scrollToIndex(visIdx, { align: 'auto' });
         if (!skipAutoFocus) {
           requestAnimationFrame(() => {
-            const row = scrollElement?.querySelector(
-              `[data-entry-index="${selectedIndex}"] input`,
-            );
+            const row = scrollElement?.querySelector(`[data-entry-index="${selectedIndex}"] input`);
             if (row instanceof HTMLInputElement) row.focus();
           });
         }
@@ -138,18 +130,16 @@
   function hasUnsavedNotes(): boolean {
     if (expandedNotes === null) return false;
     const entry = entries.find((e) => e.index === expandedNotes);
-    const saved = entry?.notes.join("\n") ?? "";
+    const saved = entry?.notes.join('\n') ?? '';
     return notesDraft !== saved;
   }
 
   function openNotes(entryIndex: number) {
     expandedNotes = entryIndex;
     const entry = entries.find((e) => e.index === entryIndex);
-    notesDraft = entry?.notes.join("\n") ?? "";
+    notesDraft = entry?.notes.join('\n') ?? '';
     requestAnimationFrame(() => {
-      const textarea = scrollElement?.querySelector(
-        `[data-entry-index="${entryIndex}"] .notes-textarea`,
-      );
+      const textarea = scrollElement?.querySelector(`[data-entry-index="${entryIndex}"] .notes-textarea`);
       if (textarea instanceof HTMLTextAreaElement) textarea.focus();
     });
   }
@@ -185,15 +175,17 @@
   }
 
   function saveNotes(entryIndex: number) {
-    const lines = notesDraft
-      .split("\n")
-      .filter((l) => l.trim() !== "");
+    const lines = notesDraft.split('\n').filter((l) => l.trim() !== '');
     onNotesChange?.(entryIndex, lines);
     expandedNotes = null;
   }
 
   function toggleCollapse(entryIndex: number) {
-    collapsedIncludes = toggleSetMember(collapsedIncludes, entryIndex);
+    if (collapsedIncludes.has(entryIndex)) {
+      collapsedIncludes.delete(entryIndex);
+    } else {
+      collapsedIncludes.add(entryIndex);
+    }
   }
 
   function isRefBroken(refPath: string): boolean {
@@ -203,8 +195,8 @@
   async function jumpToInclude(refPath: string) {
     const refName = getFileName(refPath);
     const target = entries.find((e) => {
-      if (e.entryType !== "include") return false;
-      const incPath = e.jpText ?? e.enText ?? "";
+      if (e.entryType !== 'include') return false;
+      const incPath = e.jpText ?? e.enText ?? '';
       return getFileName(incPath) === refName || incPath === refPath;
     });
     if (!target) return;
@@ -215,10 +207,10 @@
     let needsUncollapse = false;
     for (let i = target.index - 1; i >= 0; i--) {
       const entry = entries[i];
-      if (entry.entryType !== "include") continue;
+      if (entry.entryType !== 'include') continue;
       if (entry.depth >= target.depth) continue;
       if (collapsedIncludes.has(entry.index)) {
-        collapsedIncludes = toggleSetMember(collapsedIncludes, entry.index);
+        collapsedIncludes.delete(entry.index);
         needsUncollapse = true;
       }
       if (entry.depth === 0) break;
@@ -229,26 +221,23 @@
     const visIdx = visibleEntries.findIndex((e) => e.index === target.index);
     if (visIdx >= 0) {
       selectedIndex = target.index;
-      $virtualizer.scrollToIndex(visIdx, { align: "center" });
+      $virtualizer.scrollToIndex(visIdx, { align: 'center' });
     }
   }
 
   function rowClass(entry: FlatEntry): string {
-    if (!isText(entry)) return "row-structural";
-    if (isUntranslated(entry)) return "row-untranslated";
-    if (confirmedLines.has(entry.index)) return "row-confirmed";
-    if (entry.jpText && entry.enText) return "row-translated";
-    return "";
+    if (!isText(entry)) return 'row-structural';
+    if (isUntranslated(entry)) return 'row-untranslated';
+    if (confirmedLines.has(entry.index)) return 'row-confirmed';
+    if (entry.jpText && entry.enText) return 'row-translated';
+    return '';
   }
 
   function depthPadding(depth: number): string {
-    return depth > 0 ? `${depth * 16}px` : "0";
+    return depth > 0 ? `${depth * 16}px` : '0';
   }
 
-  function handleInput(
-    index: number,
-    event: Event & { currentTarget: HTMLInputElement },
-  ) {
+  function handleInput(index: number, event: Event & { currentTarget: HTMLInputElement }) {
     onEnTextChange(index, event.currentTarget.value);
   }
 
@@ -260,7 +249,7 @@
   function handleJpMouseUp(e: MouseEvent) {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !onJpSelect) return;
-    const cell = (e.currentTarget as HTMLElement);
+    const cell = e.currentTarget as HTMLElement;
     if (!cell.contains(sel.anchorNode) || !cell.contains(sel.focusNode)) return;
     const text = sel.toString().trim();
     if (text) onJpSelect(text);
@@ -291,27 +280,25 @@
   function scrollToVisibleRow(visibleIdx: number) {
     if (visibleIdx < 0 || visibleIdx >= visibleEntries.length) return;
     selectedIndex = visibleEntries[visibleIdx].index;
-    $virtualizer.scrollToIndex(visibleIdx, { align: "auto" });
+    $virtualizer.scrollToIndex(visibleIdx, { align: 'auto' });
     requestAnimationFrame(() => {
-      const row = scrollElement?.querySelector(
-        `[data-entry-index="${selectedIndex}"] input`,
-      );
+      const row = scrollElement?.querySelector(`[data-entry-index="${selectedIndex}"] input`);
       if (row instanceof HTMLInputElement) row.focus();
     });
   }
 
   function handleKeydown(event: KeyboardEvent) {
     const currentVisible = visibleIndexOf(selectedIndex);
-    const isEnFocused = document.activeElement instanceof HTMLInputElement
-            && scrollElement?.contains(document.activeElement);
+    const isEnFocused =
+      document.activeElement instanceof HTMLInputElement && scrollElement?.contains(document.activeElement);
 
-    if (event.ctrlKey && event.key === "s") {
+    if (event.ctrlKey && event.key === 's') {
       event.preventDefault();
       onSave?.();
       return;
     }
 
-    if (event.key === "Escape" && !event.defaultPrevented) {
+    if (event.key === 'Escape' && !event.defaultPrevented) {
       if (expandedNotes !== null) {
         if (hasUnsavedNotes()) {
           pendingNotesTarget = null;
@@ -325,7 +312,7 @@
       return;
     }
 
-    if (event.ctrlKey && event.key === "Enter") {
+    if (event.ctrlKey && event.key === 'Enter') {
       event.preventDefault();
       if (selectedIndex >= 0) onToggleConfirm?.(selectedIndex);
       const target = findEditableRow(currentVisible, 1);
@@ -333,13 +320,13 @@
       return;
     }
 
-    if (event.ctrlKey && event.altKey && event.key === "ArrowDown") {
+    if (event.ctrlKey && event.altKey && event.key === 'ArrowDown') {
       event.preventDefault();
       onJumpNextUnconfirmed?.();
       return;
     }
 
-    if (event.key === "Enter" && isEnFocused) {
+    if (event.key === 'Enter' && isEnFocused) {
       event.preventDefault();
       if (autoConfirmOnEnter && selectedIndex >= 0 && !confirmedLines.has(selectedIndex)) {
         onToggleConfirm?.(selectedIndex);
@@ -349,27 +336,27 @@
       return;
     }
 
-    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && isEnFocused) {
+    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && isEnFocused) {
       event.preventDefault();
-      const dir = event.key === "ArrowDown" ? 1 : -1;
+      const dir = event.key === 'ArrowDown' ? 1 : -1;
       const target = findEditableRow(currentVisible, dir as 1 | -1);
       if (target >= 0) scrollToVisibleRow(target);
       return;
     }
 
-    if (event.key === "Tab") {
+    if (event.key === 'Tab') {
       event.preventDefault();
       const dir = event.shiftKey ? -1 : 1;
-      const start = currentVisible >= 0 ? currentVisible : (dir === 1 ? -1 : visibleEntries.length);
+      const start = currentVisible >= 0 ? currentVisible : dir === 1 ? -1 : visibleEntries.length;
       const target = findEditableRow(start, dir as 1 | -1);
       if (target >= 0) scrollToVisibleRow(target);
       return;
     }
 
-    if (event.ctrlKey && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    if (event.ctrlKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
       event.preventDefault();
-      const dir = event.key === "ArrowDown" ? 1 : -1;
-      const start = currentVisible >= 0 ? currentVisible : (dir === 1 ? -1 : visibleEntries.length);
+      const dir = event.key === 'ArrowDown' ? 1 : -1;
+      const start = currentVisible >= 0 ? currentVisible : dir === 1 ? -1 : visibleEntries.length;
       const target = findUntranslatedRow(start, dir as 1 | -1);
       if (target >= 0) scrollToVisibleRow(target);
       return;
@@ -388,20 +375,21 @@
     <div class="header-cell col-en">English</div>
   </div>
   <div class="scroll-container" bind:this={scrollElement}>
-    <div
-      style:height="{$virtualizer.getTotalSize()}px"
-      style:position="relative"
-    >
+    <div style:height="{$virtualizer.getTotalSize()}px" style:position="relative">
       {#each $virtualizer.getVirtualItems() as row (row.index)}
         {@const entry = visibleEntries[row.index]}
         <div
           class="table-row {rowClass(entry)}"
           class:row-selected={entry.index === selectedIndex}
           class:row-find-match={findQuery && findMatchIndices.includes(entry.index)}
-          class:row-find-current={findQuery && currentFindMatch >= 0 && findMatchIndices[currentFindMatch] === entry.index}
+          class:row-find-current={findQuery &&
+            currentFindMatch >= 0 &&
+            findMatchIndices[currentFindMatch] === entry.index}
           style:position="absolute"
           style:top="{row.start}px"
-          style:height={expandedNotes === entry.index || (isText(entry) && entry.index === selectedIndex) ? "auto" : `${ROW_HEIGHT}px`}
+          style:height={expandedNotes === entry.index || (isText(entry) && entry.index === selectedIndex)
+            ? 'auto'
+            : `${ROW_HEIGHT}px`}
           style:min-height="{ROW_HEIGHT}px"
           style:left="0"
           style:right="0"
@@ -410,7 +398,6 @@
           use:measureRow
           onclick={() => handleRowClick(entry.index)}
         >
-
           <div
             class="cell col-num"
             class:col-num-confirmed={confirmedLines.has(entry.index)}
@@ -419,9 +406,11 @@
                 onToggleConfirm(entry.index);
               }
             }}
-            title={entry.entryType === "text"
-              ? (confirmedLines.has(entry.index) ? "Confirmed (double-click to unconfirm)" : "Double-click to confirm")
-              : ""}
+            title={entry.entryType === 'text'
+              ? confirmedLines.has(entry.index)
+                ? 'Confirmed (double-click to unconfirm)'
+                : 'Double-click to confirm'
+              : ''}
           >
             {#if isText(entry)}{entry.index + 1}{/if}
           </div>
@@ -430,10 +419,11 @@
             <button
               class="btn-icon notes-btn"
               class:has-notes={entry.notes.length > 0}
-              onclick={(e) => { e.stopPropagation(); toggleNotes(entry.index); }}
-              title={entry.notes.length > 0
-                ? `${entry.notes.length} note(s) — click to edit`
-                : "Add notes"}
+              onclick={(e) => {
+                e.stopPropagation();
+                toggleNotes(entry.index);
+              }}
+              title={entry.notes.length > 0 ? `${entry.notes.length} note(s) — click to edit` : 'Add notes'}
             >
               {#if entry.notes.length > 0}
                 <StickyNoteIcon size={12} />
@@ -447,12 +437,12 @@
               style:padding-left={depthPadding(entry.depth)}
               onmouseup={handleJpMouseUp}
             >
-              {entry.jpText ?? ""}
+              {entry.jpText ?? ''}
             </div>
             <div class="cell col-en">
               <input
                 type="text"
-                value={entry.enText ?? ""}
+                value={entry.enText ?? ''}
                 oninput={(e) => handleInput(entry.index, e)}
                 onfocus={() => handleRowClick(entry.index)}
               />
@@ -467,33 +457,28 @@
                   rows="3"
                 ></textarea>
                 <div class="notes-actions">
-                  <button
-                    class="btn-primary"
-                    disabled={!hasUnsavedNotes()}
-                    onclick={() => saveNotes(entry.index)}
-                  >Save</button>
+                  <button class="btn-primary" disabled={!hasUnsavedNotes()} onclick={() => saveNotes(entry.index)}
+                    >Save</button
+                  >
                   <button onclick={() => toggleNotes(entry.index)}>Cancel</button>
                 </div>
               </div>
             {/if}
-          {:else if entry.entryType === "comment"}
-            <div
-              class="cell col-jp structural-text"
-              style:padding-left={depthPadding(entry.depth)}
-            >
-              {entry.jpText ?? ""}
+          {:else if entry.entryType === 'comment'}
+            <div class="cell col-jp structural-text" style:padding-left={depthPadding(entry.depth)}>
+              {entry.jpText ?? ''}
             </div>
             <div class="cell col-en structural-text">
-              {entry.enText ?? ""}
+              {entry.enText ?? ''}
             </div>
-          {:else if entry.entryType === "include"}
-            <div
-              class="cell col-wide include-row"
-              style:padding-left={depthPadding(entry.depth)}
-            >
+          {:else if entry.entryType === 'include'}
+            <div class="cell col-wide include-row" style:padding-left={depthPadding(entry.depth)}>
               <button
                 class="btn-icon collapse-toggle"
-                onclick={(e) => { e.stopPropagation(); toggleCollapse(entry.index); }}
+                onclick={(e) => {
+                  e.stopPropagation();
+                  toggleCollapse(entry.index);
+                }}
               >
                 {#if collapsedIncludes.has(entry.index)}
                   <ChevronRightIcon size={12} />
@@ -502,14 +487,14 @@
                 {/if}
               </button>
               <span class="include-path">
-                {entry.jpText ?? entry.enText ?? ""}
+                {entry.jpText ?? entry.enText ?? ''}
               </span>
               <span class="include-count">
                 ({childCount(entry.index)} lines)
               </span>
             </div>
-          {:else if entry.entryType === "reference"}
-            {@const refPath = entry.jpText ?? entry.enText ?? ""}
+          {:else if entry.entryType === 'reference'}
+            {@const refPath = entry.jpText ?? entry.enText ?? ''}
             {@const broken = isRefBroken(refPath)}
             <div
               class="cell col-wide reference-row"

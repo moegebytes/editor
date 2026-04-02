@@ -14,10 +14,13 @@
   export type MenuEntry = MenuItem | MenuSeparator;
 
   export function isSeparator(entry: MenuEntry): entry is MenuSeparator {
-    return "separator" in entry;
+    return 'separator' in entry;
   }
 
-  let {items, onClose}: {
+  let {
+    items,
+    onClose,
+  }: {
     items: MenuEntry[];
     onClose: () => void;
   } = $props();

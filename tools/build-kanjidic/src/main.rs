@@ -46,8 +46,7 @@ fn build_kanjidic(xml_path: &str, db_path: &PathBuf) -> Result<()> {
 
   let tx = conn.transaction()?;
 
-  let file =
-    std::fs::File::open(xml_path).with_context(|| format!("failed to open {}", xml_path))?;
+  let file = std::fs::File::open(xml_path).with_context(|| format!("failed to open {}", xml_path))?;
   let buf_reader = std::io::BufReader::new(file);
   let mut reader = Reader::from_reader(buf_reader);
   reader.config_mut().trim_text(true);

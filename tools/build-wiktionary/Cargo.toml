@@ -3,7 +3,7 @@ name = "build-wiktionary"
 edition = "2021"
 
 [dependencies]
-rusqlite = { version = "=0.35.0", features = ["bundled"] }
+rusqlite = { version = "=0.37.0", features = ["bundled"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.119"
 anyhow = "=1.0.102"

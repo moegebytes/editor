@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { LoaderCircleIcon } from "@lucide/svelte";
+  import { LoaderCircleIcon } from '@lucide/svelte';
 
   let { visible }: { visible: boolean } = $props();
 </script>
@@ -27,7 +27,11 @@
   }
 
   @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

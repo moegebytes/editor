@@ -72,56 +72,55 @@ fn identify_inflection(conj_form: &str, aux_chain: &str, is_adjective: bool) -> 
 
   let (form, desc) = match aux_chain {
     // Polite forms (check before simpler patterns)
-    "ませんでした" =>
-      ("Masen deshita-form", format!("Polite negative past tense of the {}.", kind)),
-    "ません" =>
-      ("Masen-form", format!("Polite negative form of the {}.", kind)),
-    "ました" =>
-      ("Mashita-form", format!("Polite past tense of the {}.", kind)),
-    "ます" =>
-      ("Masu-form", format!("Polite form of the {}.", kind)),
+    "ませんでした" => (
+      "Masen deshita-form",
+      format!("Polite negative past tense of the {}.", kind),
+    ),
+    "ません" => ("Masen-form", format!("Polite negative form of the {}.", kind)),
+    "ました" => ("Mashita-form", format!("Polite past tense of the {}.", kind)),
+    "ます" => ("Masu-form", format!("Polite form of the {}.", kind)),
 
     // Negative forms
-    "なかった" =>
-      ("Nakatta-form", format!("Negative past tense of the {}.", kind)),
-    "ない" | "ぬ" | "ん" =>
-      ("Nai-form", format!("Negative form of the {}.", kind)),
+    "なかった" => ("Nakatta-form", format!("Negative past tense of the {}.", kind)),
+    "ない" | "ぬ" | "ん" => ("Nai-form", format!("Negative form of the {}.", kind)),
 
     // Past tense
-    "た" | "だ" =>
-      ("Ta-form", format!("Past tense of the {}.", kind)),
+    "た" | "だ" => ("Ta-form", format!("Past tense of the {}.", kind)),
 
     // Te-form variations
-    "ている" | "てる" | "でいる" | "でる" =>
-      ("Te-iru form", format!("Progressive or resultative form of the {}.", kind)),
-    "ていた" | "てた" | "でいた" | "でた" =>
-      ("Te-ita form", format!("Past progressive form of the {}.", kind)),
-    "て" | "で" =>
-      ("Te-form", format!("Conjunctive form of the {}.", kind)),
+    "ている" | "てる" | "でいる" | "でる" => (
+      "Te-iru form",
+      format!("Progressive or resultative form of the {}.", kind),
+    ),
+    "ていた" | "てた" | "でいた" | "でた" => {
+      ("Te-ita form", format!("Past progressive form of the {}.", kind))
+    }
+    "て" | "で" => ("Te-form", format!("Conjunctive form of the {}.", kind)),
 
     // Desire
-    "たかった" =>
-      ("Takatta-form", format!("Past tense of the desire form of the {}.", kind)),
-    "たくない" =>
-      ("Takunai-form", format!("Negative desire form of the {}.", kind)),
-    "たい" =>
-      ("Tai-form", format!("Expresses desire to perform the action of the {}.", kind)),
+    "たかった" => (
+      "Takatta-form",
+      format!("Past tense of the desire form of the {}.", kind),
+    ),
+    "たくない" => ("Takunai-form", format!("Negative desire form of the {}.", kind)),
+    "たい" => (
+      "Tai-form",
+      format!("Expresses desire to perform the action of the {}.", kind),
+    ),
 
     // Conditional
-    "たら" | "だら" =>
-      ("Tara-form", format!("Conditional form of the {}.", kind)),
-    "ば" =>
-      ("Ba-form", format!("Conditional form of the {}.", kind)),
+    "たら" | "だら" => ("Tara-form", format!("Conditional form of the {}.", kind)),
+    "ば" => ("Ba-form", format!("Conditional form of the {}.", kind)),
 
     // Voice
-    "れる" | "られる" =>
-      ("Passive/Potential", format!("Passive or potential form of the {}.", kind)),
-    "せる" | "させる" =>
-      ("Causative", format!("Causative form of the {}.", kind)),
+    "れる" | "られる" => (
+      "Passive/Potential",
+      format!("Passive or potential form of the {}.", kind),
+    ),
+    "せる" | "させる" => ("Causative", format!("Causative form of the {}.", kind)),
 
     // Volitional
-    "う" | "よう" =>
-      ("Volitional", "Expresses intention or suggestion.".to_string()),
+    "う" | "よう" => ("Volitional", "Expresses intention or suggestion.".to_string()),
 
     // No auxiliary - check conjugation form directly
     "" => {
@@ -156,8 +155,8 @@ impl JmdictDb {
 
     let jmdict = Connection::open_with_flags(jmdict_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
 
-    let dict_file = std::fs::File::open(ipadic_path)
-      .map_err(|e| JmdictError::Tokenizer(format!("failed to open IPADIC: {}", e)))?;
+    let dict_file =
+      std::fs::File::open(ipadic_path).map_err(|e| JmdictError::Tokenizer(format!("failed to open IPADIC: {}", e)))?;
     let reader = std::io::BufReader::new(dict_file);
     let dict = Dictionary::read(reader).map_err(|e| JmdictError::Tokenizer(format!("dictionary load error: {}", e)))?;
     let tokenizer = Tokenizer::new(dict);
@@ -168,7 +167,10 @@ impl JmdictDb {
   pub fn lookup(&self, query: &str) -> Result<LookupResult, JmdictError> {
     let trimmed = query.trim();
     if trimmed.is_empty() {
-      return Ok(LookupResult { entries: vec![], inflections: vec![] });
+      return Ok(LookupResult {
+        entries: vec![],
+        inflections: vec![],
+      });
     }
 
     // Detect inflections (always runs vibrato on the query)
@@ -177,7 +179,10 @@ impl JmdictDb {
     // First try exact match on the full query
     let exact = self.lookup_exact(trimmed)?;
     if !exact.is_empty() {
-      return Ok(LookupResult { entries: exact, inflections });
+      return Ok(LookupResult {
+        entries: exact,
+        inflections,
+      });
     }
 
     // Try prefix match on kanji/readings
@@ -227,10 +232,10 @@ impl JmdictDb {
     }
 
     // Count independent content words (verbs/adjectives tagged as 自立)
-    let content_indices: Vec<usize> = tokens.iter().enumerate()
-      .filter(|(_, t)| {
-        (t.pos == "動詞" || t.pos == "形容詞") && t.pos_sub1 == "自立"
-      })
+    let content_indices: Vec<usize> = tokens
+      .iter()
+      .enumerate()
+      .filter(|(_, t)| (t.pos == "動詞" || t.pos == "形容詞") && t.pos_sub1 == "自立")
       .map(|(i, _)| i)
       .collect();
 
@@ -252,9 +257,7 @@ impl JmdictDb {
     // Collect auxiliary/particle surfaces after the content word
     let aux_chain: String = tokens[idx + 1..].iter().map(|t| t.surface.as_str()).collect();
 
-    if let Some((form_name, description)) =
-      identify_inflection(&content.conj_form, &aux_chain, is_adjective)
-    {
+    if let Some((form_name, description)) = identify_inflection(&content.conj_form, &aux_chain, is_adjective) {
       vec![Inflection {
         surface: query.to_string(),
         base_form: content.base_form.clone(),
@@ -278,7 +281,9 @@ impl JmdictDb {
        LIMIT 20",
     )?;
 
-    let seq_ids: Vec<i64> = stmt.query_map([query], |row| row.get(0))?.collect::<Result<Vec<_>, _>>()?;
+    let seq_ids: Vec<i64> = stmt
+      .query_map([query], |row| row.get(0))?
+      .collect::<Result<Vec<_>, _>>()?;
     self.load_entries(&seq_ids)
   }
 
@@ -290,7 +295,9 @@ impl JmdictDb {
        ORDER BY e.priority ASC LIMIT 20",
     )?;
 
-    let seq_ids: Vec<i64> = stmt.query_map([&pattern], |row| row.get(0))?.collect::<Result<Vec<_>, _>>()?;
+    let seq_ids: Vec<i64> = stmt
+      .query_map([&pattern], |row| row.get(0))?
+      .collect::<Result<Vec<_>, _>>()?;
     self.load_entries(&seq_ids)
   }
 
@@ -301,7 +308,9 @@ impl JmdictDb {
        ORDER BY e.priority ASC LIMIT 20",
     )?;
 
-    let seq_ids: Vec<i64> = stmt.query_map([&fts_query], |row| row.get(0))?.collect::<Result<Vec<_>, _>>()?;
+    let seq_ids: Vec<i64> = stmt
+      .query_map([&fts_query], |row| row.get(0))?
+      .collect::<Result<Vec<_>, _>>()?;
     self.load_entries(&seq_ids)
   }
 
@@ -309,40 +318,54 @@ impl JmdictDb {
     let mut results = Vec::new();
 
     for &seq_id in seq_ids {
-      let mut kanji_stmt = self.jmdict.prepare_cached("SELECT keb, inf FROM kanji WHERE ent_seq = ?1")?;
+      let mut kanji_stmt = self
+        .jmdict
+        .prepare_cached("SELECT keb, inf FROM kanji WHERE ent_seq = ?1")?;
       let kanji: Vec<KanjiForm> = kanji_stmt
-        .query_map([seq_id], |row| Ok(KanjiForm { text: row.get(0)?, info: row.get(1)? }))?
+        .query_map([seq_id], |row| {
+          Ok(KanjiForm {
+            text: row.get(0)?,
+            info: row.get(1)?,
+          })
+        })?
         .collect::<Result<Vec<_>, _>>()?;
 
-      let mut read_stmt = self.jmdict.prepare_cached("SELECT reb, inf FROM readings WHERE ent_seq = ?1")?;
+      let mut read_stmt = self
+        .jmdict
+        .prepare_cached("SELECT reb, inf FROM readings WHERE ent_seq = ?1")?;
       let readings: Vec<ReadingForm> = read_stmt
-        .query_map([seq_id], |row| Ok(ReadingForm { text: row.get(0)?, info: row.get(1)? }))?
+        .query_map([seq_id], |row| {
+          Ok(ReadingForm {
+            text: row.get(0)?,
+            info: row.get(1)?,
+          })
+        })?
         .collect::<Result<Vec<_>, _>>()?;
 
-      let mut sense_stmt = self.jmdict.prepare_cached(
-        "SELECT sense_id, pos, misc FROM senses WHERE ent_seq = ?1 ORDER BY sense_id",
-      )?;
+      let mut sense_stmt = self
+        .jmdict
+        .prepare_cached("SELECT sense_id, pos, misc FROM senses WHERE ent_seq = ?1 ORDER BY sense_id")?;
       let sense_rows: Vec<(i64, String, String)> = sense_stmt
         .query_map([seq_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
         .collect::<Result<Vec<_>, _>>()?;
 
       let mut senses = Vec::new();
       for (sense_id, pos_str, misc_str) in &sense_rows {
-        let mut gloss_stmt = self.jmdict.prepare_cached("SELECT gloss FROM glosses WHERE ent_seq = ?1 AND sense_id = ?2")?;
+        let mut gloss_stmt = self
+          .jmdict
+          .prepare_cached("SELECT gloss FROM glosses WHERE ent_seq = ?1 AND sense_id = ?2")?;
         let glosses: Vec<String> = gloss_stmt
           .query_map(rusqlite::params![seq_id, sense_id], |row| row.get(0))?
           .collect::<Result<Vec<_>, _>>()?;
 
-        let mut xref_stmt = self.jmdict.prepare_cached("SELECT xref FROM xrefs WHERE ent_seq = ?1 AND sense_id = ?2")?;
+        let mut xref_stmt = self
+          .jmdict
+          .prepare_cached("SELECT xref FROM xrefs WHERE ent_seq = ?1 AND sense_id = ?2")?;
         let xrefs: Vec<String> = xref_stmt
           .query_map(rusqlite::params![seq_id, sense_id], |row| row.get(0))?
           .collect::<Result<Vec<_>, _>>()?;
 
-        let pos: Vec<String> = pos_str
-          .split(';')
-          .filter(|s| !s.is_empty())
-          .map(String::from)
-          .collect();
+        let pos: Vec<String> = pos_str.split(';').filter(|s| !s.is_empty()).map(String::from).collect();
 
         let misc: Vec<String> = misc_str
           .split(';')

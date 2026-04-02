@@ -160,9 +160,10 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
     let is_en = entry.lang_code.as_deref() == Some("en");
 
     // Check if entry has at least one sense with a gloss
-    let has_senses = entry.senses.as_ref().map_or(false, |senses| {
-      senses.iter().any(|s| s.glosses.as_ref().map_or(false, |g| g.first().is_some()))
-    });
+    let has_senses = entry
+      .senses
+      .as_ref()
+      .is_some_and(|senses| senses.iter().any(|s| s.glosses.as_ref().is_some_and(|g| !g.is_empty())));
     if !has_senses {
       skip_count += 1;
       continue;
@@ -178,8 +179,7 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
       .and_then(|s| s.iter().find_map(|s| s.ipa.as_deref()));
 
     tx.execute(
-      "INSERT INTO words (id, word, pos, lang_code, sort_group, \
-       reading, romaji, ipa) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+      "INSERT INTO words (id, word, pos, lang_code, sort_group, reading, romaji, ipa) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
       rusqlite::params![
         word_id,
         entry.word,
@@ -217,10 +217,7 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
                 Some(t) if !t.is_empty() => t,
                 _ => continue,
               };
-              let english = ex
-                .english
-                .as_deref()
-                .or(ex.translation.as_deref());
+              let english = ex.english.as_deref().or(ex.translation.as_deref());
               tx.execute(
                 "INSERT INTO examples (sense_id, text, english, romaji) VALUES (?1, ?2, ?3, ?4)",
                 rusqlite::params![sense_id, text, english, ex.roman],
@@ -234,7 +231,7 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
     }
 
     entry_count += 1;
-    if entry_count % 10000 == 0 {
+    if entry_count.is_multiple_of(10000) {
       eprintln!("  {} entries...", entry_count);
     }
   }
@@ -256,21 +253,27 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
 
 fn extract_reading(entry: &RawEntry) -> Option<String> {
   let forms = entry.forms.as_ref()?;
-  let canonical = forms.iter().find(|f| {
-    f.tags.as_ref().map_or(false, |t| t.iter().any(|tag| tag == "canonical"))
-  })?;
+  let canonical = forms
+    .iter()
+    .find(|f| f.tags.as_ref().is_some_and(|t| t.iter().any(|tag| tag == "canonical")))?;
   let ruby = canonical.ruby.as_ref()?;
   if ruby.is_empty() {
     return None;
   }
   let reading: String = ruby.iter().map(|pair| pair.1.as_str()).collect();
-  if reading.is_empty() { None } else { Some(reading) }
+  if reading.is_empty() {
+    None
+  } else {
+    Some(reading)
+  }
 }
 
 fn extract_romaji(entry: &RawEntry) -> Option<String> {
   let forms = entry.forms.as_ref()?;
   let rom = forms.iter().find(|f| {
-    f.tags.as_ref().map_or(false, |t| t.iter().any(|tag| tag == "romanization"))
+    f.tags
+      .as_ref()
+      .is_some_and(|t| t.iter().any(|tag| tag == "romanization"))
   })?;
   rom.form.clone()
 }
@@ -289,8 +292,7 @@ fn insert_relations(
           continue;
         }
         tx.execute(
-          "INSERT INTO relations (word_id, sense_id, kind, term) \
-           VALUES (?1, ?2, ?3, ?4)",
+          "INSERT INTO relations (word_id, sense_id, kind, term) VALUES (?1, ?2, ?3, ?4)",
           rusqlite::params![word_id, sense_id, kind, term],
         )?;
       }

@@ -23,7 +23,7 @@ editor/
 ├── CLAUDE.md
 ├── package.json
 ├── index.html
-├── vite.config.ts
+├── vite.config.js
 ├── svelte.config.js
 ├── tsconfig.json
 ├── public/
@@ -95,14 +95,14 @@ a separate Cargo workspace.
 
 ## Strings file format
 
-| Line type | Syntax | Parsed as |
-|---|---|---|
-| Plain text | `Hello world` | `StringsEntry::Text(String)` |
-| Comment | `; comment` | `StringsEntry::Comment(String)` |
-| Include | `#include <path.txt>` | `StringsEntry::Include { path, entries }` — recursive |
-| Emit | `#emit identifier` | `StringsEntry::Emit(String)` |
-| Reference | `#reference <path.txt>` | `StringsEntry::Reference(String)` |
-| Blank line | (empty) | `StringsEntry::Blank` |
+| Line type  | Syntax                  | Parsed as                                             |
+|------------|-------------------------|-------------------------------------------------------|
+| Plain text | `Hello world`           | `StringsEntry::Text(String)`                          |
+| Comment    | `; comment`             | `StringsEntry::Comment(String)`                       |
+| Include    | `#include <path.txt>`   | `StringsEntry::Include { path, entries }` - recursive |
+| Emit       | `#emit identifier`      | `StringsEntry::Emit(String)`                          |
+| Reference  | `#reference <path.txt>` | `StringsEntry::Reference(String)`                     |
+| Blank line | (empty)                 | `StringsEntry::Blank`                                 |
 
 - Includes resolved relative to parent dir. Circular includes rejected.
 - Parse -> write round-trips produce identical output (including included files).
@@ -207,15 +207,23 @@ cd tools && cargo run -p build-wiktionary -- \
 # install frontend deps
 pnpm install
 
+# lint (all linters in parallel)
+pnpm lint
+
+# format frontend code
+pnpm format
+
 # run tests
-pnpm svelte-check
-cd src-tauri && cargo test
+pnpm check && pnpm test
 
 # dev mode with hot reload
 pnpm tauri dev
 
 # production build
 pnpm tauri build
+
+# clean build artifacts
+pnpm clean
 ```
 
 ### Preparing fresh Wiktionary JSON
@@ -281,6 +289,7 @@ jq -cf enwiktionary-ja_en.jq enwiktionary-ja.jsonl enwiktionary-en.jsonl > enwik
 ## Coding Conventions
 
 - **Rust:** `anyhow` for app errors, `thiserror` for module error types. `rustfmt` + `clippy`.
+- **Linting:** `pnpm lint` runs ESLint, Prettier, clippy, and rustfmt in parallel. `printWidth`/`max_width` = 150.
 - **TypeScript:** Strict mode. Svelte 5 runes (`$state`, `$derived`, `$props`). No legacy stores.
 - **IPC boundary:** JSON via `serde` with `#[serde(rename_all = "camelCase")]`. Keep types flat.
 - **Package management:** pnpm via corepack.

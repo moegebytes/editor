@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { invoke } from '@tauri-apps/api/core';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import type {
   EnvironmentInfo,
   FlatEntry,
@@ -12,15 +12,15 @@ import type {
   ProjectSettings,
   RecentProject,
   WiktResult,
-} from "./types";
+} from './types';
 
 export async function saveTranslation(entries: FlatEntry[]): Promise<void> {
-  return invoke("save_translation", { entries });
+  return invoke('save_translation', { entries });
 }
 
 const STRINGS_FILTER = {
-  name: "Strings files",
-  extensions: ["strings", "txt"],
+  name: 'Strings files',
+  extensions: ['strings', 'txt'],
 };
 
 export async function openFileDialog(defaultPath?: string): Promise<string | null> {
@@ -28,8 +28,8 @@ export async function openFileDialog(defaultPath?: string): Promise<string | nul
 }
 
 const PROJECT_FILTER = {
-  name: "Project files",
-  extensions: ["json"],
+  name: 'Project files',
+  extensions: ['json'],
 };
 
 export async function exportProjectDialog(): Promise<string | null> {
@@ -37,59 +37,59 @@ export async function exportProjectDialog(): Promise<string | null> {
 }
 
 export async function lookupJmdict(query: string): Promise<LookupResult> {
-  return invoke("lookup_jmdict", { query });
+  return invoke('lookup_jmdict', { query });
 }
 
 export async function lookupKanji(ch: string): Promise<KanjiEntry | null> {
-  return invoke("lookup_kanji", { ch });
+  return invoke('lookup_kanji', { ch });
 }
 
 export async function lookupWiktionary(term: string): Promise<WiktResult> {
-  return invoke("lookup_wiktionary", { term });
+  return invoke('lookup_wiktionary', { term });
 }
 
 export async function createProject(name: string, files: ProjectFiles): Promise<Project> {
-  return invoke("create_project", { name, files });
+  return invoke('create_project', { name, files });
 }
 
 export async function openProject(id: string): Promise<Project> {
-  return invoke("open_project", { id });
+  return invoke('open_project', { id });
 }
 
 export async function saveProject(): Promise<void> {
-  return invoke("save_project");
+  return invoke('save_project');
 }
 
 export async function confirmLine(index: number): Promise<void> {
-  return invoke("confirm_line", { index });
+  return invoke('confirm_line', { index });
 }
 
 export async function unconfirmLine(index: number): Promise<void> {
-  return invoke("unconfirm_line", { index });
+  return invoke('unconfirm_line', { index });
 }
 
 export async function listRecentProjects(): Promise<RecentProject[]> {
-  return invoke("list_recent_projects");
+  return invoke('list_recent_projects');
 }
 
 export async function listAllProjects(): Promise<RecentProject[]> {
-  return invoke("list_all_projects");
+  return invoke('list_all_projects');
 }
 
 export async function removeRecentProject(id: string): Promise<void> {
-  return invoke("remove_recent_project", { id });
+  return invoke('remove_recent_project', { id });
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  return invoke("delete_project", { id });
+  return invoke('delete_project', { id });
 }
 
 export async function exportProject(destPath: string): Promise<void> {
-  return invoke("export_project", { destPath });
+  return invoke('export_project', { destPath });
 }
 
 export async function getProjectInfo(id: string): Promise<ProjectInfo> {
-  return invoke("get_project_info", { id });
+  return invoke('get_project_info', { id });
 }
 
 export async function updateProject(
@@ -98,7 +98,7 @@ export async function updateProject(
   files: ProjectFiles,
   settings: ProjectSettings,
 ): Promise<void> {
-  return invoke("update_project", { id, name, files, settings });
+  return invoke('update_project', { id, name, files, settings });
 }
 
 export async function importProjectDialog(): Promise<string | null> {
@@ -106,17 +106,17 @@ export async function importProjectDialog(): Promise<string | null> {
 }
 
 export async function previewImport(sourcePath: string): Promise<ImportPreview> {
-  return invoke("preview_import", { sourcePath });
+  return invoke('preview_import', { sourcePath });
 }
 
 export async function importProject(sourcePath: string, name: string, files: ProjectFiles): Promise<Project> {
-  return invoke("import_project", { sourcePath, name, files });
+  return invoke('import_project', { sourcePath, name, files });
 }
 
 export async function openAppDir(): Promise<void> {
-  return invoke("open_app_dir");
+  return invoke('open_app_dir');
 }
 
 export async function getEnvironmentInfo(): Promise<EnvironmentInfo> {
-  return invoke("get_environment_info");
+  return invoke('get_environment_info');
 }

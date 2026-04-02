@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronUpIcon, ChevronDownIcon, XIcon } from "@lucide/svelte";
+  import { ChevronUpIcon, ChevronDownIcon, XIcon } from '@lucide/svelte';
 
   let {
     visible = $bindable(false),
@@ -21,8 +21,8 @@
     currentMatch?: number;
   } = $props();
 
-  let findText = $state("");
-  let replaceText = $state("");
+  let findText = $state('');
+  let replaceText = $state('');
   let findInput: HTMLInputElement | undefined = $state();
 
   $effect(() => {
@@ -36,7 +36,7 @@
   }
 
   function handleFindKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter") {
+    if (e.key === 'Enter') {
       e.preventDefault();
       if (e.shiftKey) {
         onFindPrev();
@@ -44,21 +44,21 @@
         onFindNext();
       }
     }
-    if (e.key === "Escape") {
+    if (e.key === 'Escape') {
       e.preventDefault();
       visible = false;
     }
   }
 
   function handleReplaceKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape") {
+    if (e.key === 'Escape') {
       e.preventDefault();
       visible = false;
     }
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && visible && !e.defaultPrevented) {
+    if (e.key === 'Escape' && visible && !e.defaultPrevented) {
       e.preventDefault();
       visible = false;
     }
@@ -98,18 +98,8 @@
     <button onclick={onFindNext} disabled={matchCount === 0} class="nav-btn">
       <ChevronDownIcon size={14} />
     </button>
-    <button
-      onclick={() => onReplace(replaceText)}
-      disabled={matchCount === 0}
-    >
-      Replace
-    </button>
-    <button
-      onclick={() => onReplaceAll(findText, replaceText)}
-      disabled={matchCount === 0}
-    >
-      Replace All
-    </button>
+    <button onclick={() => onReplace(replaceText)} disabled={matchCount === 0}> Replace </button>
+    <button onclick={() => onReplaceAll(findText, replaceText)} disabled={matchCount === 0}> Replace All </button>
     <button onclick={() => (visible = false)} class="btn-icon close-btn">
       <XIcon size={14} />
     </button>

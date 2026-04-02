@@ -5,14 +5,25 @@
   "engines": {
     "node": ">=22.11.0"
   },
-  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be",
+  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "tauri": "tauri"
+    "lint": "run-p --aggregate-output --continue-on-error lint:*",
+    "lint:eslint": "eslint src/ *.config.js",
+    "lint:prettier": "prettier --check src/",
+    "lint:clippy": "run-p --aggregate-output --continue-on-error lint:clippy:*",
+    "lint:clippy:tauri": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "lint:clippy:tools": "cargo clippy --manifest-path tools/Cargo.toml -- -D warnings",
+    "lint:rustfmt": "run-p --aggregate-output --continue-on-error lint:rustfmt:*",
+    "lint:rustfmt:tauri": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check",
+    "lint:rustfmt:tools": "cargo fmt --manifest-path tools/Cargo.toml --all -- --check",
+    "format": "prettier --write src/",
+    "clean": "rimraf dist src-tauri/gen && cargo clean --manifest-path src-tauri/Cargo.toml && cargo clean --manifest-path tools/Cargo.toml"
   },
   "dependencies": {
     "@lucide/svelte": "1.7.0",
@@ -21,10 +32,21 @@
     "@tauri-apps/plugin-dialog": "2.6.0"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@sveltejs/vite-plugin-svelte": "7.0.0",
     "@tauri-apps/cli": "2.10.1",
-    "svelte": "5.55.0",
-    "svelte-check": "4.4.5",
+    "@typescript-eslint/eslint-plugin": "8.58.0",
+    "@typescript-eslint/parser": "8.58.0",
+    "eslint": "10.1.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-svelte": "3.16.0",
+    "globals": "17.4.0",
+    "npm-run-all2": "8.0.4",
+    "prettier": "3.8.1",
+    "prettier-plugin-svelte": "3.5.1",
+    "rimraf": "6.1.3",
+    "svelte": "5.55.1",
+    "svelte-check": "4.4.6",
     "tslib": "2.8.1",
     "typescript": "6.0.2",
     "vite": "8.0.3"

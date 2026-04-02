@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { WiktResult, WiktRelation } from "../lib/types";
-  import { lookupWiktionary } from "../lib/ipc";
-  import { isKanji } from "../lib/utils";
-  import KanjiDetail from "./KanjiDetail.svelte";
+  import type { WiktResult, WiktRelation } from '../lib/types';
+  import { lookupWiktionary } from '../lib/ipc';
+  import { isKanji } from '../lib/utils';
+  import KanjiDetail from './KanjiDetail.svelte';
 
   let {
     onNavigate,
@@ -62,6 +62,7 @@
   }
 
   function groupRelations(rels: WiktRelation[]): RelationGroup[] {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const map = new Map<string, WiktRelation[]>();
     for (const r of rels) {
       const list = map.get(r.kind);
@@ -73,13 +74,13 @@
     }
     const groups: RelationGroup[] = [];
     for (const [kind, items] of map) {
-      if (kind === "derived") continue;
-      groups.push({ kind, label: kind.replace(/_/g, " "), items });
+      if (kind === 'derived') continue;
+      groups.push({ kind, label: kind.replace(/_/g, ' '), items });
     }
     // Derived terms last, if any
-    const derived = map.get("derived");
+    const derived = map.get('derived');
     if (derived) {
-      groups.push({ kind: "derived", label: "derived", items: derived });
+      groups.push({ kind: 'derived', label: 'derived', items: derived });
     }
     return groups;
   }
@@ -101,12 +102,9 @@
       <div class="wikt-entry">
         <div class="entry-headword">
           <span class="headword-text">
-            {#each entry.word.split("") as ch}
+            {#each entry.word.split('') as ch}
               {#if isKanji(ch)}
-                <button
-                  class="btn-icon kanji-link"
-                  onclick={() => kanjiDetailRef?.lookup(ch)}
-                >{ch}</button>
+                <button class="btn-icon kanji-link" onclick={() => kanjiDetailRef?.lookup(ch)}>{ch}</button>
               {:else}
                 {ch}
               {/if}
@@ -125,14 +123,13 @@
 
         <span class="pos-tags">{entry.pos}</span>
 
-
         {#each entry.senses as sense, i}
           <div class="sense">
             <div class="sense-line">
               <span class="sense-num">{i + 1}.</span>
               <span class="sense-gloss">{sense.gloss}</span>
               {#if sense.tags.length > 0}
-                <span class="misc-tags">({sense.tags.join(", ")})</span>
+                <span class="misc-tags">({sense.tags.join(', ')})</span>
               {/if}
             </div>
 
@@ -151,14 +148,10 @@
             {#if sense.relations.length > 0}
               {@const groups = groupRelations(sense.relations)}
               {#each groups as group}
-                <div class="relation-group" class:derived-group={group.kind === "derived"}>
+                <div class="relation-group" class:derived-group={group.kind === 'derived'}>
                   <span class="relation-label">{group.label}:</span>
                   {#each group.items as rel}
-                    <button
-                      class="relation-link"
-
-                      onclick={() => navigateTo(rel.term)}
-                    >{rel.term}</button>
+                    <button class="relation-link" onclick={() => navigateTo(rel.term)}>{rel.term}</button>
                   {/each}
                 </div>
               {/each}
@@ -170,13 +163,10 @@
           {@const groups = groupRelations(entry.relations)}
           <div class="entry-relations">
             {#each groups as group}
-              <div class="relation-group" class:derived-group={group.kind === "derived"}>
+              <div class="relation-group" class:derived-group={group.kind === 'derived'}>
                 <span class="relation-label">{group.label}:</span>
                 {#each group.items as rel}
-                  <button
-                    class="relation-link"
-                    onclick={() => navigateTo(rel.term)}
-                  >{rel.term}</button>
+                  <button class="relation-link" onclick={() => navigateTo(rel.term)}>{rel.term}</button>
                 {/each}
               </div>
             {/each}
@@ -260,7 +250,6 @@
       margin-bottom: 2px;
     }
 
-
     .sense {
       font-size: 13px;
       line-height: 1.5;
@@ -323,7 +312,7 @@
         text-underline-offset: 2px;
 
         &::after {
-          content: ",\a0";
+          content: ',\a0';
           text-decoration: none;
           color: var(--color-text);
         }

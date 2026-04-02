@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { XIcon, SearchIcon, ArrowLeftIcon, ArrowRightIcon } from "@lucide/svelte";
-  import JmdictTab from "./JmdictTab.svelte";
-  import WiktTab from "./WiktTab.svelte";
+  import { XIcon, SearchIcon, ArrowLeftIcon, ArrowRightIcon } from '@lucide/svelte';
+  import JmdictTab from './JmdictTab.svelte';
+  import WiktTab from './WiktTab.svelte';
 
   const MIN_WIDTH = 360;
   const MAX_WIDTH = 600;
   const MAX_HISTORY = 100;
 
   let {
-    query = "",
+    query = '',
     querySeq = 0,
     visible = $bindable(true),
     width = $bindable(MIN_WIDTH),
@@ -19,8 +19,8 @@
     width?: number;
   } = $props();
 
-  let searchInput = $state("");
-  let activeTab: "dict" | "wikt" = $state("dict");
+  let searchInput = $state('');
+  let activeTab: 'dict' | 'wikt' = $state('dict');
 
   let dictTab: JmdictTab | undefined = $state();
   let wiktTab: WiktTab | undefined = $state();
@@ -46,8 +46,8 @@
   }
 
   function clearState() {
-    searchInput = "";
-    activeTab = "dict";
+    searchInput = '';
+    activeTab = 'dict';
     dictTab?.clear();
     wiktTab?.clear();
     history = [];
@@ -60,7 +60,7 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && visible && !e.defaultPrevented) {
+    if (e.key === 'Escape' && visible && !e.defaultPrevented) {
       e.preventDefault();
       close();
     }
@@ -75,7 +75,7 @@
     if (query && querySeq !== lastSeq) {
       lastSeq = querySeq;
       searchInput = query;
-      activeTab = "dict";
+      activeTab = 'dict';
       pushHistory(query);
       dictTab?.lookup(query);
       wiktTab?.lookup(query);
@@ -89,7 +89,7 @@
   }
 
   function handleSearchKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter") {
+    if (e.key === 'Enter') {
       e.preventDefault();
       triggerSearch();
     }
@@ -140,13 +140,13 @@
     }
 
     function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
       resizeCleanup = null;
     }
 
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
     resizeCleanup = onUp;
   }
 </script>
@@ -157,20 +157,10 @@
   <div class="dict-panel" style:width="{width}px">
     <div class="dict-content">
       <div class="dict-header">
-        <button
-          class="btn-icon dict-nav-btn"
-          onclick={goBack}
-          disabled={!navCanGoBack}
-          title="Back"
-        >
+        <button class="btn-icon dict-nav-btn" onclick={goBack} disabled={!navCanGoBack} title="Back">
           <ArrowLeftIcon size={14} />
         </button>
-        <button
-          class="btn-icon dict-nav-btn"
-          onclick={goForward}
-          disabled={!navCanGoForward}
-          title="Forward"
-        >
+        <button class="btn-icon dict-nav-btn" onclick={goForward} disabled={!navCanGoForward} title="Forward">
           <ArrowRightIcon size={14} />
         </button>
         <input
@@ -180,12 +170,7 @@
           onkeydown={handleSearchKeydown}
           class="dict-search-input"
         />
-        <button
-          class="btn-icon dict-search-btn"
-          onclick={triggerSearch}
-          disabled={!searchInput.trim()}
-          title="Search"
-        >
+        <button class="btn-icon dict-search-btn" onclick={triggerSearch} disabled={!searchInput.trim()} title="Search">
           <SearchIcon size={14} />
         </button>
         <button class="btn-icon dict-close" onclick={close}>
@@ -194,22 +179,16 @@
       </div>
 
       <div class="tab-bar">
-        <button
-          class="tab-btn"
-          class:active={activeTab === "dict"}
-          onclick={() => (activeTab = "dict")}
-        >JMdict</button>
-        <button
-          class="tab-btn"
-          class:active={activeTab === "wikt"}
-          onclick={() => (activeTab = "wikt")}
-        >Wiktionary</button>
+        <button class="tab-btn" class:active={activeTab === 'dict'} onclick={() => (activeTab = 'dict')}>JMdict</button>
+        <button class="tab-btn" class:active={activeTab === 'wikt'} onclick={() => (activeTab = 'wikt')}
+          >Wiktionary</button
+        >
       </div>
 
-      <div class="tab-content" class:hidden={activeTab !== "dict"}>
+      <div class="tab-content" class:hidden={activeTab !== 'dict'}>
         <JmdictTab bind:this={dictTab} onNavigate={handleNavigate} />
       </div>
-      <div class="tab-content" class:hidden={activeTab !== "wikt"}>
+      <div class="tab-content" class:hidden={activeTab !== 'wikt'}>
         <WiktTab bind:this={wiktTab} onNavigate={handleNavigate} />
       </div>
     </div>
@@ -259,7 +238,9 @@
     flex: 1;
   }
 
-  .dict-close, .dict-search-btn, .dict-nav-btn {
+  .dict-close,
+  .dict-search-btn,
+  .dict-nav-btn {
     padding: 4px 6px;
     font-size: 12px;
     line-height: 1;
@@ -299,7 +280,9 @@
     color: var(--color-text-muted);
     font-size: 12px;
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
 
     &:hover {
       color: var(--color-text);

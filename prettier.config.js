@@ -1,0 +1,15 @@
+export default {
+  tabWidth: 2,
+  semi: true,
+  singleQuote: true,
+  printWidth: 120,
+  plugins: ['prettier-plugin-svelte'],
+  overrides: [
+    {
+      files: '*.svelte',
+      options: {
+        parser: 'svelte',
+      },
+    },
+  ],
+};

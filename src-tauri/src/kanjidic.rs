@@ -44,9 +44,9 @@ impl KanjiDb {
 
   pub fn lookup(&self, ch: char) -> Result<Option<KanjiEntry>, KanjidicError> {
     let literal = ch.to_string();
-    let mut stmt = self.conn.prepare(
-      "SELECT literal, grade, stroke_count, jlpt, freq FROM kanji WHERE literal = ?1",
-    )?;
+    let mut stmt = self
+      .conn
+      .prepare("SELECT literal, grade, stroke_count, jlpt, freq FROM kanji WHERE literal = ?1")?;
 
     let entry = stmt
       .query_row([&literal], |row| {
@@ -83,8 +83,13 @@ impl KanjiDb {
       }
     }
 
-    let mut meaning_stmt = self.conn.prepare("SELECT meaning FROM meanings WHERE literal = ?1 AND lang IS NULL")?;
-    entry.meanings = meaning_stmt.query_map([&literal], |row| row.get(0))?.filter_map(|r| r.ok()).collect();
+    let mut meaning_stmt = self
+      .conn
+      .prepare("SELECT meaning FROM meanings WHERE literal = ?1 AND lang IS NULL")?;
+    entry.meanings = meaning_stmt
+      .query_map([&literal], |row| row.get(0))?
+      .filter_map(|r| r.ok())
+      .collect();
 
     Ok(Some(entry))
   }

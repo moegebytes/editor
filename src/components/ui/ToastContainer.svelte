@@ -1,11 +1,6 @@
 <script lang="ts">
-  import { toast } from "../../lib/toast.svelte";
-  import {
-    XIcon,
-    CircleCheckIcon,
-    CircleXIcon,
-    InfoIcon,
-  } from "@lucide/svelte";
+  import { toast } from '../../lib/toast.svelte';
+  import { XIcon, CircleCheckIcon, CircleXIcon, InfoIcon } from '@lucide/svelte';
 
   const iconMap = {
     error: CircleXIcon,
@@ -16,7 +11,7 @@
   // Insert zero-width spaces after path separators and colons so the browser
   // breaks long file paths at natural boundaries instead of mid-word.
   function softBreak(text: string): string {
-    return text.replace(/([\\/:])(?=\S)/g, "$1\u200B");
+    return text.replace(/([\\/:])(?=\S)/g, '$1\u200B');
   }
 </script>
 
@@ -31,10 +26,7 @@
           <XIcon size={14} />
         </button>
         {#if t.duration > 0}
-          <div
-            class="toast-timer"
-            style="animation-duration: {t.duration}ms"
-          ></div>
+          <div class="toast-timer" style="animation-duration: {t.duration}ms"></div>
         {/if}
       </div>
     {/each}
@@ -122,8 +114,12 @@
   }
 
   @keyframes toast-timer-shrink {
-    from { transform: scaleX(1); }
-    to { transform: scaleX(0); }
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
   }
 
   @keyframes toast-slide-in {

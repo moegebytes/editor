@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { RecentProject } from "../lib/types";
-  import { getVersion } from "@tauri-apps/api/app";
-  import { XIcon, Trash2Icon, TriangleAlertIcon, SettingsIcon, FolderOpenIcon } from "@lucide/svelte";
+  import type { RecentProject } from '../lib/types';
+  import { getVersion } from '@tauri-apps/api/app';
+  import { XIcon, Trash2Icon, TriangleAlertIcon, SettingsIcon, FolderOpenIcon } from '@lucide/svelte';
   import {
     listRecentProjects,
     listAllProjects,
@@ -13,12 +13,17 @@
     getProjectInfo,
     updateProject,
     openAppDir,
-  } from "../lib/ipc";
-  import LoadingOverlay from "./ui/LoadingOverlay.svelte";
-  import Dialog from "./ui/Dialog.svelte";
-  import { toast } from "../lib/toast.svelte";
+  } from '../lib/ipc';
+  import LoadingOverlay from './ui/LoadingOverlay.svelte';
+  import Dialog from './ui/Dialog.svelte';
+  import { toast } from '../lib/toast.svelte';
 
-  let {onNewProject, onImportProject, onOpenProject, loading = false}: {
+  let {
+    onNewProject,
+    onImportProject,
+    onOpenProject,
+    loading = false,
+  }: {
     onNewProject: (name: string, jpPath: string, enPath: string) => void;
     onImportProject: (sourcePath: string, name: string, jp: string, en: string) => void;
     onOpenProject: (id: string) => void;
@@ -28,16 +33,16 @@
   let recentProjects: RecentProject[] = $state([]);
   let allProjects: RecentProject[] = $state([]);
   let showNewForm = $state(false);
-  let importSourcePath = $state("");
+  let importSourcePath = $state('');
   let deleteTarget: RecentProject | null = $state(null);
   let editTarget: RecentProject | null = $state(null);
-  let newName = $state("");
-  let newJpPath = $state("");
-  let newEnPath = $state("");
-  let formError = $state("");
-  let appVersion = $state("");
+  let newName = $state('');
+  let newJpPath = $state('');
+  let newEnPath = $state('');
+  let formError = $state('');
+  let appVersion = $state('');
 
-  let isImport = $derived(importSourcePath !== "");
+  let isImport = $derived(importSourcePath !== '');
   let isEdit = $derived(editTarget !== null);
 
   getVersion().then((v) => (appVersion = v));
@@ -62,17 +67,17 @@
   }
 
   function handleCreate() {
-    formError = "";
+    formError = '';
     if (!newName.trim()) {
-      formError = "Project name is required";
+      formError = 'Project name is required';
       return;
     }
     if (!newJpPath) {
-      formError = "Japanese file is required";
+      formError = 'Japanese file is required';
       return;
     }
     if (!newEnPath) {
-      formError = "English file is required";
+      formError = 'English file is required';
       return;
     }
     if (isImport) {
@@ -90,8 +95,8 @@
       newName = info.name;
       newJpPath = info.files.jp;
       newEnPath = info.files.en;
-      formError = "";
-      importSourcePath = "";
+      formError = '';
+      importSourcePath = '';
       showNewForm = true;
     } catch (err) {
       formError = `${err}`;
@@ -100,42 +105,37 @@
   }
 
   async function handleSaveEdit() {
-    formError = "";
+    formError = '';
     if (!editTarget) return;
     if (!newName.trim()) {
-      formError = "Project name is required";
+      formError = 'Project name is required';
       return;
     }
     if (!newJpPath) {
-      formError = "Japanese file is required";
+      formError = 'Japanese file is required';
       return;
     }
     if (!newEnPath) {
-      formError = "English file is required";
+      formError = 'English file is required';
       return;
     }
     try {
       const info = await getProjectInfo(editTarget.id);
-      await updateProject(
-        editTarget.id,
-        newName.trim(),
-        { jp: newJpPath, en: newEnPath },
-        info.settings,
-      );
+      await updateProject(editTarget.id, newName.trim(), { jp: newJpPath, en: newEnPath }, info.settings);
       closeForm();
       refreshLists();
-      toast.success("Project updated");
+      toast.success('Project updated');
     } catch (err) {
       formError = `${err}`;
     }
   }
 
   function resetForm() {
-    newName = "";
-    newJpPath = "";
-    newEnPath = "";
-    formError = "";
-    importSourcePath = "";
+    newName = '';
+    newJpPath = '';
+    newEnPath = '';
+    formError = '';
+    importSourcePath = '';
     editTarget = null;
   }
 
@@ -156,9 +156,9 @@
       const preview = await previewImport(path);
       importSourcePath = path;
       newName = preview.name;
-      newJpPath = "";
-      newEnPath = "";
-      formError = "";
+      newJpPath = '';
+      newEnPath = '';
+      formError = '';
       showNewForm = true;
     } catch (e) {
       formError = `${e}`;
@@ -197,11 +197,7 @@
               <button class="project-name text-ellipsis" onclick={() => onOpenProject(proj.id)}>
                 {proj.name}
               </button>
-              <button
-                class="btn-icon item-action"
-                title="Edit project"
-                onclick={(e) => handleEditProject(e, proj)}
-              >
+              <button class="btn-icon item-action" title="Edit project" onclick={(e) => handleEditProject(e, proj)}>
                 <SettingsIcon size={14} />
               </button>
               <button
@@ -235,11 +231,7 @@
               <button class="project-name text-ellipsis" onclick={() => onOpenProject(proj.id)}>
                 {proj.name}
               </button>
-              <button
-                class="btn-icon item-action"
-                title="Edit project"
-                onclick={(e) => handleEditProject(e, proj)}
-              >
+              <button class="btn-icon item-action" title="Edit project" onclick={(e) => handleEditProject(e, proj)}>
                 <SettingsIcon size={14} />
               </button>
               <button
@@ -261,40 +253,32 @@
   <div class="home-right">
     {#if !showNewForm}
       <div class="home-actions">
-        <button class="new-btn" onclick={showNew}>
-          New Project
-        </button>
-        <button class="import-btn" onclick={handleImport}>
-          Import Project
-        </button>
+        <button class="new-btn" onclick={showNew}> New Project </button>
+        <button class="import-btn" onclick={handleImport}> Import Project </button>
       </div>
     {:else}
       <div class="new-form">
-        <h2>{isEdit ? "Edit Project" : isImport ? "Import Project" : "New Project"}</h2>
+        <h2>{isEdit ? 'Edit Project' : isImport ? 'Import Project' : 'New Project'}</h2>
         <div class="form-field">
-          <label>Project Name</label>
-          <input
-            type="text"
-            bind:value={newName}
-            placeholder="My Translation"
-          />
+          <label for="project-name">Project Name</label>
+          <input id="project-name" type="text" bind:value={newName} placeholder="My Translation" />
         </div>
         <div class="form-field">
-          <label>Japanese File</label>
+          <label for="jp-file-browse">Japanese File</label>
           <div class="file-pick">
             <span class="file-path text-ellipsis" title={newJpPath}>
-              {newJpPath || "No file selected"}
+              {newJpPath || 'No file selected'}
             </span>
-            <button onclick={handlePickJp}>Browse</button>
+            <button id="jp-file-browse" onclick={handlePickJp}>Browse</button>
           </div>
         </div>
         <div class="form-field">
-          <label>English File</label>
+          <label for="en-file-browse">English File</label>
           <div class="file-pick">
             <span class="file-path text-ellipsis" title={newEnPath}>
-              {newEnPath || "No file selected"}
+              {newEnPath || 'No file selected'}
             </span>
-            <button onclick={handlePickEn}>Browse</button>
+            <button id="en-file-browse" onclick={handlePickEn}>Browse</button>
           </div>
         </div>
         {#if formError}
@@ -460,7 +444,8 @@
     align-items: center;
   }
 
-  .new-btn, .import-btn {
+  .new-btn,
+  .import-btn {
     padding: 32px 48px;
     font-size: 22px;
     border-radius: 8px;
@@ -543,5 +528,4 @@
       line-height: 1.5;
     }
   }
-
 </style>

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { XIcon } from "@lucide/svelte";
-  import type { Snippet } from "svelte";
+  import { XIcon } from '@lucide/svelte';
+  import type { Snippet } from 'svelte';
 
   let {
     visible = $bindable(false),
@@ -16,56 +16,70 @@
     actions?: Snippet;
   } = $props();
 
+  let dialogEl: HTMLDialogElement | undefined = $state();
+
+  $effect(() => {
+    if (!dialogEl) return;
+    if (visible && !dialogEl.open) {
+      dialogEl.showModal();
+    } else if (!visible && dialogEl.open) {
+      dialogEl.close();
+    }
+  });
+
   function close() {
     visible = false;
     onClose?.();
   }
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && visible && !e.defaultPrevented) {
-      e.preventDefault();
-      close();
-    }
+  function handleCancel(e: Event) {
+    e.preventDefault();
+    close();
+  }
+
+  function handleBackdropClick(e: MouseEvent) {
+    if (e.target === dialogEl) close();
   }
 </script>
 
-<svelte:window onkeydowncapture={handleKeydown} />
-
-{#if visible}
-  <div class="overlay" onclick={close} role="none">
-    <div class="dialog" onclick={(e) => e.stopPropagation()} role="none">
-      <div class="dialog-header">
-        <h2>{title}</h2>
-        <button class="btn-icon dialog-close" onclick={close}>
-          <XIcon size={16} />
-        </button>
-      </div>
-
-      <div class="dialog-body">
-        {@render children()}
-      </div>
-
-      {#if actions}
-        <div class="dialog-actions">
-          {@render actions()}
-        </div>
-      {/if}
+<dialog bind:this={dialogEl} oncancel={handleCancel} onclick={handleBackdropClick} aria-label={title}>
+  <div class="dialog-inner">
+    <div class="dialog-header">
+      <h2>{title}</h2>
+      <button class="btn-icon dialog-close" onclick={close}>
+        <XIcon size={16} />
+      </button>
     </div>
+
+    <div class="dialog-body">
+      {@render children()}
+    </div>
+
+    {#if actions}
+      <div class="dialog-actions">
+        {@render actions()}
+      </div>
+    {/if}
   </div>
-{/if}
+</dialog>
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  dialog {
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    margin: auto;
   }
 
-  .dialog {
+  dialog::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  .dialog-inner {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 8px;

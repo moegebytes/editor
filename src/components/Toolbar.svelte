@@ -1,6 +1,6 @@
 <script lang="ts">
-  import DropdownMenu from "./ui/DropdownMenu.svelte";
-  import type { MenuEntry } from "./ui/DropdownMenu.svelte";
+  import DropdownMenu from './ui/DropdownMenu.svelte';
+  import type { MenuEntry } from './ui/DropdownMenu.svelte';
 
   let {
     onSave,
@@ -16,7 +16,7 @@
     onAbout,
     projectName,
     saveDisabled,
-    filterText = $bindable(""),
+    filterText = $bindable(''),
   }: {
     onSave: () => void;
     onExport: () => void;
@@ -51,47 +51,41 @@
   }
 
   let projectItems: MenuEntry[] = $derived([
-    { label: "Save", action: onSave, disabled: saveDisabled, shortcut: "Ctrl+S" },
-    { label: "Export", action: onExport },
+    { label: 'Save', action: onSave, disabled: saveDisabled, shortcut: 'Ctrl+S' },
+    { label: 'Export', action: onExport },
     { separator: true },
-    { label: "Settings", action: onOpenSettings },
+    { label: 'Settings', action: onOpenSettings },
     { separator: true },
-    { label: "Close Project", action: onCloseProject, danger: true },
+    { label: 'Close Project', action: onCloseProject, danger: true },
   ]);
 
   let lineItems: MenuEntry[] = $derived([
-    { label: "Next Untranslated", action: onJumpUntranslated, shortcut: "Ctrl+\u2193" },
-    { label: "Next Unconfirmed", action: onJumpUnconfirmed, shortcut: "Ctrl+Alt+\u2193" },
+    { label: 'Next Untranslated', action: onJumpUntranslated, shortcut: 'Ctrl+\u2193' },
+    { label: 'Next Unconfirmed', action: onJumpUnconfirmed, shortcut: 'Ctrl+Alt+\u2193' },
     { separator: true },
-    { label: "Confirm / Unconfirm", action: onConfirmToggle, shortcut: "Ctrl+Enter" },
+    { label: 'Confirm / Unconfirm', action: onConfirmToggle, shortcut: 'Ctrl+Enter' },
   ]);
 
   let toolsItems: MenuEntry[] = $derived([
-    { label: "Go to Line", action: onGoToLine, shortcut: "Ctrl+G" },
-    { label: "Open Dictionary", action: onOpenDict, shortcut: "Ctrl+D" },
-    { label: "Find & Replace", action: onToggleFindReplace, shortcut: "Ctrl+H" },
+    { label: 'Go to Line', action: onGoToLine, shortcut: 'Ctrl+G' },
+    { label: 'Open Dictionary', action: onOpenDict, shortcut: 'Ctrl+D' },
+    { label: 'Find & Replace', action: onToggleFindReplace, shortcut: 'Ctrl+H' },
   ]);
 
-  let helpItems: MenuEntry[] = $derived([
-    { label: "About", action: onAbout },
-  ]);
-
+  let helpItems: MenuEntry[] = $derived([{ label: 'About', action: onAbout }]);
 </script>
 
 {#if openMenu}
-  <div class="menu-backdrop" onclick={closeMenu}></div>
+  <div class="menu-backdrop" onclick={closeMenu} role="none"></div>
 {/if}
 
 <div class="toolbar">
   <div class="toolbar-left">
     <div class="menu-container">
-      <button
-        class:btn-active={openMenu === "project"}
-        onclick={() => toggleMenu("project")}
-      >
-        {projectName ?? "Project"}
+      <button class:btn-active={openMenu === 'project'} onclick={() => toggleMenu('project')}>
+        {projectName ?? 'Project'}
       </button>
-      {#if openMenu === "project"}
+      {#if openMenu === 'project'}
         <div class="menu-pos">
           <DropdownMenu items={projectItems} onClose={closeMenu} />
         </div>
@@ -99,13 +93,8 @@
     </div>
 
     <div class="menu-container">
-      <button
-        class:btn-active={openMenu === "line"}
-        onclick={() => toggleMenu("line")}
-      >
-        Line
-      </button>
-      {#if openMenu === "line"}
+      <button class:btn-active={openMenu === 'line'} onclick={() => toggleMenu('line')}> Line </button>
+      {#if openMenu === 'line'}
         <div class="menu-pos">
           <DropdownMenu items={lineItems} onClose={closeMenu} />
         </div>
@@ -113,13 +102,8 @@
     </div>
 
     <div class="menu-container">
-      <button
-        class:btn-active={openMenu === "tools"}
-        onclick={() => toggleMenu("tools")}
-      >
-        Tools
-      </button>
-      {#if openMenu === "tools"}
+      <button class:btn-active={openMenu === 'tools'} onclick={() => toggleMenu('tools')}> Tools </button>
+      {#if openMenu === 'tools'}
         <div class="menu-pos">
           <DropdownMenu items={toolsItems} onClose={closeMenu} />
         </div>
@@ -127,28 +111,16 @@
     </div>
 
     <div class="menu-container">
-      <button
-        class:btn-active={openMenu === "help"}
-        onclick={() => toggleMenu("help")}
-      >
-        Help
-      </button>
-      {#if openMenu === "help"}
+      <button class:btn-active={openMenu === 'help'} onclick={() => toggleMenu('help')}> Help </button>
+      {#if openMenu === 'help'}
         <div class="menu-pos">
           <DropdownMenu items={helpItems} onClose={closeMenu} />
         </div>
       {/if}
     </div>
-
   </div>
 
-  <input
-    type="text"
-    placeholder="Filter..."
-    bind:value={filterText}
-    bind:this={filterInput}
-    class="filter-input"
-  />
+  <input type="text" placeholder="Filter..." bind:value={filterText} bind:this={filterInput} class="filter-input" />
 </div>
 
 <style>
@@ -176,8 +148,6 @@
   .menu-container {
     position: relative;
   }
-
-
 
   .menu-pos {
     position: absolute;

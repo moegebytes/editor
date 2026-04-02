@@ -18,6 +18,14 @@
       "icons/icon.ico",
       "icons/icon.png"
     ],
+    "linux": {
+      "rpm": {
+        "compression": {
+          "type": "zstd",
+          "level": 3
+        }
+      }
+    },
     "resources": {
       "../resources/gen/jmdict.sqlite": "resources/jmdict.sqlite",
       "../resources/gen/kanjidic2.sqlite": "resources/kanjidic2.sqlite",
@@ -37,7 +45,7 @@
       "csp": {
         "default-src": "'self'",
         "script-src": "'self'",
-        "style-src": "'self' 'unsafe-inline'",
+        "style-src": "'self'",
         "img-src": "'self' asset: https://asset.localhost",
         "connect-src": "ipc: http://ipc.localhost"
       }

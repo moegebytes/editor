@@ -1,6 +1,6 @@
 <script lang="ts">
-  import DropdownMenu from "./DropdownMenu.svelte";
-  import type { MenuEntry } from "./DropdownMenu.svelte";
+  import DropdownMenu from './DropdownMenu.svelte';
+  import type { MenuEntry } from './DropdownMenu.svelte';
 
   let visible = $state(false);
   let x = $state(0);
@@ -25,27 +25,36 @@
 
       result.push(
         {
-          label: "Cut",
+          label: 'Cut',
           disabled: !selected,
-          action: () => { el.focus(); document.execCommand("cut"); },
+          action: () => {
+            el.focus();
+            document.execCommand('cut');
+          },
         },
         {
-          label: "Copy",
+          label: 'Copy',
           disabled: !selected,
-          action: () => { el.focus(); document.execCommand("copy"); },
+          action: () => {
+            el.focus();
+            document.execCommand('copy');
+          },
         },
         {
-          label: "Paste",
+          label: 'Paste',
           action: () => {
             el.focus();
             navigator.clipboard.readText().then((text) => {
-              document.execCommand("insertText", false, text);
+              document.execCommand('insertText', false, text);
             });
           },
         },
         {
-          label: "Select All",
-          action: () => { el.focus(); el.select(); },
+          label: 'Select All',
+          action: () => {
+            el.focus();
+            el.select();
+          },
         },
       );
     }
@@ -85,7 +94,9 @@
 <svelte:document
   oncontextmenu={handleContextMenu}
   onclick={hide}
-  onkeydown={(e) => { if (e.key === "Escape") hide(); }}
+  onkeydown={(e) => {
+    if (e.key === 'Escape') hide();
+  }}
 />
 
 {#if visible}

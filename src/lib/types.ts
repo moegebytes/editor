@@ -1,4 +1,4 @@
-export type EntryType = "text" | "comment" | "include" | "emit" | "reference" | "blank";
+export type EntryType = 'text' | 'comment' | 'include' | 'emit' | 'reference' | 'blank';
 
 export interface FlatEntry {
   index: number;

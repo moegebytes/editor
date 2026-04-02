@@ -1,6 +1,6 @@
 [package]
 name = "yona"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 
 [profile.release]
@@ -16,9 +16,9 @@ tauri-plugin-opener = "=2.5.3"
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.119"
 thiserror = "=2.0.18"
-rusqlite = { version = "=0.35.0", features = ["bundled"] }
+rusqlite = { version = "=0.37.0", features = ["bundled"] }
 vibrato = { version = "=0.5.2", default-features = false }
-uuid = { version = "=1.17.0", features = ["v4"] }
+uuid = { version = "=1.23.0", features = ["v4"] }
 log = "=0.4.29"
 simplelog = "=0.12.2"
 time-format = "=1.2.2"

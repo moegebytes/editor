@@ -2,6 +2,7 @@ strictPeerDependencies: true
 strictDepBuilds: true
 
 blockExoticSubdeps: true
+dedupePeers: true
 
 onlyBuiltDependencies:
   - classic-level

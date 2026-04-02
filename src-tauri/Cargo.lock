@@ -2048,9 +2048,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.33.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "947e6816f7825b2b45027c2c32e7085da9934defa535de4a6a46b10a4d5257fa"
+checksum = "133c182a6a2c87864fe97778797e46c7e999672690dc9fa3ee8e241aa4a9c13f"
 dependencies = [
  "cc",
  "pkg-config",
@@ -3096,9 +3096,9 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.35.0"
+version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a22715a5d6deef63c637207afbe68d0c72c3f8d0022d7cf9714c442d6157606b"
+checksum = "165ca6e57b20e1351573e3729b958bc62f0e48025386970b6e4d29e7a7e71f3f"
 dependencies = [
  "bitflags 2.11.0",
  "fallible-iterator",
@@ -4527,13 +4527,13 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uuid"
-version = "1.17.0"
+version = "1.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cf4199d1e5d15ddd86a694e4d0dffa9c323ce759fea589f00fef9d81cc1931d"
+checksum = "5ac8b6f42ead25368cf5b098aeb3dc8a1a2c05a3eee8a9a1a68c640edbfc79d9"
 dependencies = [
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "js-sys",
- "serde",
+ "serde_core",
  "wasm-bindgen",
 ]
 
@@ -5497,7 +5497,7 @@ dependencies = [
 
 [[package]]
 name = "yona"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "log",
  "rusqlite",

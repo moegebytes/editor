@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { KanjiEntry } from "../lib/types";
-  import { lookupKanji } from "../lib/ipc";
-  import { XIcon } from "@lucide/svelte";
+  import type { KanjiEntry } from '../lib/types';
+  import { lookupKanji } from '../lib/ipc';
+  import { XIcon } from '@lucide/svelte';
 
   let kanjiDetail: KanjiEntry | null = $state(null);
   let error: string | null = $state(null);
@@ -29,10 +29,7 @@
   <div class="kanji-detail">
     <div class="kanji-detail-header">
       <span class="kanji-large">{kanjiDetail.literal}</span>
-      <button
-        class="btn-icon kanji-close"
-        onclick={() => (kanjiDetail = null)}
-      ><XIcon size={16} /></button>
+      <button class="btn-icon kanji-close" onclick={() => (kanjiDetail = null)}><XIcon size={16} /></button>
     </div>
     <div class="kanji-meta">
       <span>{kanjiDetail.strokeCount} strokes</span>
@@ -49,17 +46,17 @@
     {#if kanjiDetail.onReadings.length > 0}
       <div class="kanji-readings">
         <span class="reading-label">On:</span>
-        {kanjiDetail.onReadings.join("\u3001")}
+        {kanjiDetail.onReadings.join('\u3001')}
       </div>
     {/if}
     {#if kanjiDetail.kunReadings.length > 0}
       <div class="kanji-readings">
         <span class="reading-label">Kun:</span>
-        {kanjiDetail.kunReadings.join("\u3001")}
+        {kanjiDetail.kunReadings.join('\u3001')}
       </div>
     {/if}
     <div class="kanji-meanings">
-      {kanjiDetail.meanings.join(", ")}
+      {kanjiDetail.meanings.join(', ')}
     </div>
   </div>
 {/if}

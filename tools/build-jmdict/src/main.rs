@@ -35,9 +35,7 @@ fn pri_score(tag: &str) -> i32 {
     "spec2" => 60,
     "gai1" => 70,
     "gai2" => 80,
-    _ if tag.starts_with("nf") => {
-      tag[2..].parse::<i32>().unwrap_or(99) + 100
-    }
+    _ if tag.starts_with("nf") => tag[2..].parse::<i32>().unwrap_or(99) + 100,
     _ => 999,
   }
 }
@@ -144,17 +142,26 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
           "entry" => {
             if in_entry && ent_seq > 0 {
               let priority = compute_priority(&pri_list);
-              tx.execute("INSERT INTO entries VALUES (?1, ?2)", rusqlite::params![ent_seq, priority])?;
+              tx.execute(
+                "INSERT INTO entries VALUES (?1, ?2)",
+                rusqlite::params![ent_seq, priority],
+              )?;
               for (keb, inf) in &kanji_list {
                 let inf_str = if inf.is_empty() { None } else { Some(inf.join("; ")) };
-                tx.execute("INSERT INTO kanji VALUES (?1, ?2, ?3)", rusqlite::params![ent_seq, keb, inf_str])?;
+                tx.execute(
+                  "INSERT INTO kanji VALUES (?1, ?2, ?3)",
+                  rusqlite::params![ent_seq, keb, inf_str],
+                )?;
               }
               for (reb, inf) in &reading_list {
                 let inf_str = if inf.is_empty() { None } else { Some(inf.join("; ")) };
-                tx.execute("INSERT INTO readings VALUES (?1, ?2, ?3)", rusqlite::params![ent_seq, reb, inf_str])?;
+                tx.execute(
+                  "INSERT INTO readings VALUES (?1, ?2, ?3)",
+                  rusqlite::params![ent_seq, reb, inf_str],
+                )?;
               }
               entry_count += 1;
-              if entry_count % 1000 == 0 {
+              if entry_count.is_multiple_of(1000) {
                 eprintln!("  {} entries...", entry_count);
               }
             }
@@ -181,10 +188,16 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
                 rusqlite::params![ent_seq, sense_id, pos_str, misc_str],
               )?;
               for g in &gloss_list {
-                tx.execute("INSERT INTO glosses VALUES (?1, ?2, ?3)", rusqlite::params![ent_seq, sense_id, g])?;
+                tx.execute(
+                  "INSERT INTO glosses VALUES (?1, ?2, ?3)",
+                  rusqlite::params![ent_seq, sense_id, g],
+                )?;
               }
               for x in &xref_list {
-                tx.execute("INSERT INTO xrefs VALUES (?1, ?2, ?3)", rusqlite::params![ent_seq, sense_id, x])?;
+                tx.execute(
+                  "INSERT INTO xrefs VALUES (?1, ?2, ?3)",
+                  rusqlite::params![ent_seq, sense_id, x],
+                )?;
               }
             }
             in_sense = false;

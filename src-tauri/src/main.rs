@@ -62,6 +62,13 @@ fn main() {
       logging::init(&config_dir);
       info!("Starting...");
 
+      let projects_dir = config_dir.join("projects");
+      std::fs::create_dir_all(&projects_dir).map_err(|e| {
+        error!("Failed to create data directory '{}': {}", projects_dir.display(), e);
+        e
+      })?;
+      app.manage(commands::DataDir(config_dir.clone()));
+
       let resource_dir = app.path().resource_dir()?;
       let jmdict_path = resource_dir.join(RES_JMDICT);
       let ipadic_path = resource_dir.join(RES_IPADIC);
