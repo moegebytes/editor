@@ -9,5 +9,7 @@
 /dist/
 /node_modules/
 
-# generated dictionary databases
-/resources/gen/
+# decompressed and generated resources
+/resources/*
+!/resources/src/
+!/resources/**/*.zst

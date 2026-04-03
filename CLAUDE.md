@@ -29,17 +29,17 @@ editor/
 ├── svelte.config.js
 ├── tsconfig.json
 ├── public/
-│   └── fonts/                   -- Bundled fonts
+│   └── fonts/                       -- Bundled fonts
 │       └── NotoSansJP-Variable.woff2
-├── src/                         -- Svelte 5 + TypeScript frontend
+├── src/                             -- Svelte 5 + TypeScript frontend
 │   ├── App.svelte
 │   ├── main.ts
 │   ├── app.css
 │   ├── lib/
-│   │   ├── types.ts             -- Types for IPC
-│   │   ├── ipc.ts               -- Tauri invoke wrappers
-│   │   ├── utils.ts             -- Shared utilities (entry predicates, set helpers, kanji detection)
-│   │   └── toast.svelte.ts      -- Toast notification store (Svelte 5 runes module)
+│   │   ├── types.ts                 -- Types for IPC
+│   │   ├── ipc.ts                   -- Tauri invoke wrappers
+│   │   ├── utils.ts                 -- Shared utilities (entry predicates, set helpers, kanji detection)
+│   │   └── toast.svelte.ts          -- Toast notification store (Svelte 5 runes module)
 │   └── components/
 │       ├── ui/
 │       │   ├── ContextMenu.svelte
@@ -60,33 +60,34 @@ editor/
 │       ├── Toolbar.svelte
 │       ├── WiktTab.svelte
 │       └── UnsavedChangesDialog.svelte
-├── src-tauri/                   -- Tauri 2 backend
+├── src-tauri/                       -- Tauri 2 backend
 │   ├── Cargo.toml
 │   ├── tauri.conf.json
 │   ├── capabilities/
 │   └── src/
-│       ├── main.rs              -- Tauri app setup, dictionary loading
-│       ├── commands.rs          -- IPC command handlers
-│       ├── logging.rs           -- Per-session file logger setup
-│       ├── project.rs           -- Project config persistence
-│       ├── strings.rs           -- Strings format parser/writer
-│       ├── core.rs              -- File pairing, FlatEntry type, notes, reconstruction
-│       ├── jmdict.rs            -- JMdict SQLite queries + Vibrato tokenizer
-│       ├── kanjidic.rs          -- KANJIDIC2 SQLite queries (kanji lookup)
-│       ├── util.rs              -- Shared utilities (friendly IO error messages)
-│       └── wiktionary.rs        -- Wiktionary offline SQLite queries
+│       ├── main.rs                  -- Tauri app setup, dictionary loading
+│       ├── commands.rs              -- IPC command handlers
+│       ├── logging.rs               -- Per-session file logger setup
+│       ├── project.rs               -- Project config persistence
+│       ├── strings.rs               -- Strings format parser/writer
+│       ├── core.rs                  -- File pairing, FlatEntry type, notes, reconstruction
+│       ├── jmdict.rs                -- JMdict SQLite queries + Vibrato tokenizer
+│       ├── kanjidic.rs              -- KANJIDIC2 SQLite queries (kanji lookup)
+│       ├── util.rs                  -- Shared utilities (friendly IO error messages)
+│       └── wiktionary.rs            -- Wiktionary offline SQLite queries
 ├── tools/
 │   ├── Cargo.toml
-│   ├── build-jmdict/            -- Offline tool: JMdict XML -> SQLite
-│   ├── build-kanjidic/          -- Offline tool: KANJIDIC2 XML -> SQLite
-│   └── build-wiktionary/        -- Offline tool: wiktextract JSONL -> SQLite
+│   ├── build-jmdict/                -- Offline tool: JMdict XML -> SQLite
+│   ├── build-kanjidic/              -- Offline tool: KANJIDIC2 XML -> SQLite
+│   └── build-wiktionary/            -- Offline tool: wiktextract JSONL -> SQLite
 └── resources/
-    ├── ipadic-mecab-v270.dict   -- Pre-compiled IPADIC for vibrato
-    ├── src/                     -- Compressed source data (zstd)
+    ├── ipadic-mecab-v270.dict.zstd  -- Pre-compiled IPADIC for vibrato (zstd)
+    ├── ipadic-mecab-v270.dict       -- Pre-compiled IPADIC for vibrato (decompressed, gitignored)
+    ├── src/                         -- Compressed source data (zstd)
     │   ├── JMdict_e.xml.zst
     │   ├── kanjidic2.xml.zst
     │   └── enwiktionary-ja_en.jsonl.zst
-    ├── gen/                     -- Generated files (gitignored)
+    ├── gen/                         -- Generated files (gitignored)
     │   ├── jmdict.sqlite
     │   ├── kanjidic2.sqlite
     │   └── wiktionary.sqlite
@@ -188,19 +189,20 @@ get_environment_info() -> EnvironmentInfo { appName, appVersion, tauriVersion, o
 
 ```bash
 # decompress resources (one-time, requires zstd)
-zstd -d resources/src/JMdict_e.xml.zst
-zstd -d resources/src/kanjidic2.xml.zst
-zstd -d resources/src/enwiktionary-ja_en.jsonl.zst
+zstd -d resources/ipadic-mecab-v270.dict.zst
 
 # build JMdict database (one-time)
+zstd -d resources/src/JMdict_e.xml.zst
 cd tools && cargo run -p build-jmdict -- \
   ../resources/src/JMdict_e.xml ../resources/gen/
 
 # build KANJIDIC2 database (one-time)
+zstd -d resources/src/kanjidic2.xml.zst
 cd tools && cargo run -p build-kanjidic -- \
   ../resources/src/kanjidic2.xml ../resources/gen/
 
 # build wiktionary database (one-time)
+zstd -d resources/src/enwiktionary-ja_en.jsonl.zst
 cd tools && cargo run -p build-wiktionary -- \
   ../resources/src/enwiktionary-ja_en.jsonl ../resources/gen/
 ```
@@ -277,13 +279,30 @@ wiktwords --db-path enwiktionary-latest.db --edition en --language-code ja \
 wiktwords --db-path enwiktionary-latest.db --edition en --language-code en \
   --examples --etymologies --linkages --pronunciations --out enwiktionary-en.jsonl
 
-# combine both languages and clean-up remaining stale elements such as redirects
-# or unrelated thesaurus entries
-cat <<EOF > enwiktionary-ja_en.jq
+# combine both languages, keep only fields used by build-wiktionary, and clean-up
+# remaining stale elements such as redirects or unrelated thesaurus entries
+cat <<'EOF' > enwiktionary-ja_en.jq
+def rels: [.[]? | {word}];
+def examples: [.[]? | {text, english, translation, roman}
+  | with_entries(select(.value != null))
+  | select(.text != null and .text != "")];
+
 select(has("senses") and has("pos") and (.senses | length > 0))
-| del(.categories, .head_templates, .etymology_templates, .etymology_text, .lang)
-| del(.senses[].categories, .senses[].raw_glosses, .senses[].topics, .senses[].links)
-| .sounds = [.sounds[]? | select(has("audio") | not)]
+| (.lang_code == "en") as $en
+| {word, pos, lang_code, etymology_number, 
+   forms: [.forms[]? | {form, ruby, tags} | with_entries(select(.value != null))],
+   sounds: [.sounds[]? | select(has("ipa")) | {ipa}],
+   synonyms: (.synonyms | rels), antonyms: (.antonyms | rels),
+   coordinate_terms: (.coordinate_terms | rels), related: (.related | rels),
+   derived: (.derived | rels), hyponyms: (.hyponyms | rels),
+   senses: [.senses[] | {glosses, tags,
+     synonyms: (.synonyms | rels), antonyms: (.antonyms | rels),
+     coordinate_terms: (.coordinate_terms | rels), related: (.related | rels),
+     derived: (.derived | rels), hypernyms: (.hypernyms | rels),
+     hyponyms: (.hyponyms | rels),
+     examples: (if $en then null else .examples | examples end)}
+   | with_entries(select(.value != null and .value != []))]}
+| with_entries(select(.value != null and .value != []))
 EOF
 jq -cf enwiktionary-ja_en.jq enwiktionary-ja.jsonl enwiktionary-en.jsonl > enwiktionary-ja_en.jsonl
 ```

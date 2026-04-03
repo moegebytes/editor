@@ -12,7 +12,7 @@
   <a href="#features">Features</a> •
   <a href="#screenshots">Screenshots</a> •
   <a href="#download">Download</a> •
-  <a href="#getting-started">Getting Started</a> •
+  <a href="#getting-started">Getting started</a> •
   <a href="#acknowledgments">Acknowledgments</a>
 </p>
 
@@ -65,7 +65,7 @@ Download the latest release for your platform from the [Releases](https://github
 | macOS    | `.dmg`              |
 | Linux    | `.deb`, `.AppImage` |
 
-## Getting Started
+## Getting started
 
 1. **Create a project** - Click *New Project*, give it a name, and select the paired Japanese and English script files.
 2. **Translate** - Double-click any English cell to edit. The Japanese source stays visible on the left.
@@ -73,7 +73,7 @@ Download the latest release for your platform from the [Releases](https://github
 4. **Track progress** - Double-click a row number to mark a line as confirmed (green). Use *Line -> Next Untranslated* to jump to the next unfinished line.
 5. **Save & export** - *Project -> Save* stores your work. *Project -> Export* writes the translated strings back to a file.
 
-### Keyboard Shortcuts
+### Keyboard shortcuts
 
 | Shortcut | Action         |
 |----------|----------------|
@@ -82,7 +82,7 @@ Download the latest release for your platform from the [Releases](https://github
 | `Ctrl+G` | Go to Line     |
 | `Ctrl+F` | Filter rows    |
 
-## Building from Source
+## Building from source
 
 Requires [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/) ≥ 22, and [pnpm](https://pnpm.io/) (enabled via corepack).
 
@@ -90,14 +90,23 @@ Requires [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/) ≥ 22, and 
 # Install frontend dependencies
 pnpm install
 
-# One-time: decompress and build dictionary databases (requires zstd)
-zstd -d resources/src/JMdict_e.xml.zst
-zstd -d resources/src/kanjidic2.xml.zst
-zstd -d resources/src/enwiktionary-ja_en.jsonl.zst
+# Decompress resources (one-time, requires zstd)
+zstd -d resources/ipadic-mecab-v270.dict.zst
 
-cd tools && cargo run -p build-jmdict -- ../resources/src/JMdict_e.xml ../resources/gen/
-cd tools && cargo run -p build-kanjidic -- ../resources/src/kanjidic2.xml ../resources/gen/
-cd tools && cargo run -p build-wiktionary -- ../resources/src/enwiktionary-ja_en.jsonl ../resources/gen/
+# Build JMdict database (one-time)
+zstd -d resources/src/JMdict_e.xml.zst
+cd tools && cargo run -p build-jmdict -- \
+  ../resources/src/JMdict_e.xml ../resources/gen/
+
+# Build KANJIDIC2 database (one-time)
+zstd -d resources/src/kanjidic2.xml.zst
+cd tools && cargo run -p build-kanjidic -- \
+  ../resources/src/kanjidic2.xml ../resources/gen/
+
+# Build Wiktionary database (one-time)
+zstd -d resources/src/enwiktionary-ja_en.jsonl.zst
+cd tools && cargo run -p build-wiktionary -- \
+  ../resources/src/enwiktionary-ja_en.jsonl ../resources/gen/
 
 # Development
 pnpm tauri dev
@@ -110,7 +119,7 @@ pnpm tauri build
 
 Yona relies on the following open data sources and libraries:
 
-### Dictionaries & Data
+### Dictionaries
 
 - **[JMdict](https://www.edrdg.org/jmdict/j_jmdict.html)** - Japanese–English dictionary maintained by the [Electronic Dictionary Research and Development Group](https://www.edrdg.org/) (EDRDG). Licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 - **[KANJIDIC2](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project)** - Kanji dictionary maintained by EDRDG. Licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).

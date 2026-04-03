@@ -90,6 +90,10 @@ jobs:
           cd tools && cargo run --release -p build-wiktionary -- \
             ../resources/src/enwiktionary-ja_en.jsonl ../resources/gen/
 
+      - name: Decompress IPADIC dictionary
+        shell: bash
+        run: zstd -d resources/ipadic-mecab-v270.dict.zst
+
       - name: Cache Rust build
         uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
