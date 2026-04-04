@@ -164,7 +164,7 @@ impl JmdictDb {
     Ok(JmdictDb { jmdict, tokenizer })
   }
 
-  pub fn lookup(&self, query: &str) -> Result<LookupResult, JmdictError> {
+  pub fn lookup(&self, query: &str, partial: bool) -> Result<LookupResult, JmdictError> {
     let trimmed = query.trim();
     if trimmed.is_empty() {
       return Ok(LookupResult {
@@ -173,20 +173,30 @@ impl JmdictDb {
       });
     }
 
+    let variants = crate::util::kana_variants(trimmed);
+
     // Detect inflections (always runs vibrato on the query)
     let inflections = self.detect_inflections(trimmed);
 
-    // First try exact match on the full query
-    let exact = self.lookup_exact(trimmed)?;
-    if !exact.is_empty() {
-      return Ok(LookupResult {
-        entries: exact,
-        inflections,
-      });
+    if !partial {
+      // First try exact match on the full query + kana variants
+      let mut exact = self.lookup_exact(trimmed)?;
+      for v in &variants {
+        merge_entries(&mut exact, self.lookup_exact(v)?);
+      }
+      if !exact.is_empty() {
+        return Ok(LookupResult {
+          entries: exact,
+          inflections,
+        });
+      }
     }
 
-    // Try prefix match on kanji/readings
+    // Try prefix match on kanji/readings + kana variants
     let mut entries = self.lookup_prefix(trimmed)?;
+    for v in &variants {
+      merge_entries(&mut entries, self.lookup_prefix(v)?);
+    }
 
     // Fall back to FTS gloss search (for English queries)
     if entries.is_empty() {
@@ -277,8 +287,7 @@ impl JmdictDb {
        ORDER BY e.priority ASC, \
          CASE WHEN (SELECT keb FROM kanji WHERE ent_seq = e.ent_seq LIMIT 1) = ?1 THEN 0 \
               WHEN (SELECT reb FROM readings WHERE ent_seq = e.ent_seq LIMIT 1) = ?1 THEN 1 \
-              ELSE 2 END \
-       LIMIT 20",
+              ELSE 2 END",
     )?;
 
     let seq_ids: Vec<i64> = stmt
@@ -292,7 +301,7 @@ impl JmdictDb {
     let mut stmt = self.jmdict.prepare_cached(
       "SELECT e.ent_seq FROM entries e \
        WHERE e.ent_seq IN (SELECT ent_seq FROM kanji WHERE keb LIKE ?1 UNION SELECT ent_seq FROM readings WHERE reb LIKE ?1) \
-       ORDER BY e.priority ASC LIMIT 20",
+       ORDER BY e.priority ASC LIMIT 50",
     )?;
 
     let seq_ids: Vec<i64> = stmt
@@ -390,5 +399,13 @@ impl JmdictDb {
     }
 
     Ok(results)
+  }
+}
+
+fn merge_entries(target: &mut Vec<JmdictEntry>, source: Vec<JmdictEntry>) {
+  for entry in source {
+    if !target.iter().any(|e| e.ent_seq == entry.ent_seq) {
+      target.push(entry);
+    }
   }
 }

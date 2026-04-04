@@ -1,39 +1,43 @@
 <script lang="ts">
-  import type { ProjectFiles, ProjectSettings } from '../lib/types';
+  import type { AppSettings, ProjectFiles, ProjectSettings } from '../lib/types';
   import { ArrowLeftIcon, SaveIcon } from '@lucide/svelte';
 
   let {
     projectName,
     files,
-    settings = $bindable({ autoConfirmOnEnter: false }),
+    settings = $bindable({}),
+    appSettings = $bindable({ autoConfirmOnEnter: false, partialSearch: false }),
     onBack,
     onSave,
   }: {
     projectName: string;
     files: ProjectFiles;
     settings?: ProjectSettings;
+    appSettings?: AppSettings;
     onBack: () => void;
-    onSave: (name: string, settings: ProjectSettings) => void;
+    onSave: (name: string, settings: ProjectSettings, appSettings: AppSettings) => void;
   } = $props();
 
   let nameInput = $state('');
-  let draft: ProjectSettings = $state({ autoConfirmOnEnter: false });
-  let activeTab: 'project' | 'editor' = $state('project');
+  let draftApp: AppSettings = $state({ autoConfirmOnEnter: false, partialSearch: false });
+  let activeTab: 'project' | 'editor' | 'dictionary' = $state('project');
 
   $effect(() => {
     nameInput = projectName;
-    draft = { ...settings };
+    draftApp = { ...appSettings };
   });
 
   let hasChanges = $derived(
-    nameInput.trim() !== projectName || draft.autoConfirmOnEnter !== settings.autoConfirmOnEnter,
+    nameInput.trim() !== projectName ||
+      draftApp.autoConfirmOnEnter !== appSettings.autoConfirmOnEnter ||
+      draftApp.partialSearch !== appSettings.partialSearch,
   );
 
   function save() {
     const trimmedName = nameInput.trim() || projectName;
     if (hasChanges) {
-      settings = { ...draft };
-      onSave(trimmedName, draft);
+      appSettings = { ...draftApp };
+      onSave(trimmedName, settings, draftApp);
     }
   }
 </script>
@@ -61,6 +65,9 @@
         <button class="tab" class:tab-active={activeTab === 'editor'} onclick={() => (activeTab = 'editor')}>
           Editor
         </button>
+        <button class="tab" class:tab-active={activeTab === 'dictionary'} onclick={() => (activeTab = 'dictionary')}>
+          Dictionary
+        </button>
       </div>
 
       <div class="tab-content">
@@ -78,13 +85,24 @@
             <span class="field-path text-ellipsis" title={files.en}>{files.en}</span>
           </div>
           <p class="field-hint">To change file paths, close the project and edit it from the home screen.</p>
-        {:else}
+        {:else if activeTab === 'editor'}
           <label class="check-row">
-            <input type="checkbox" bind:checked={draft.autoConfirmOnEnter} />
+            <input type="checkbox" bind:checked={draftApp.autoConfirmOnEnter} />
             <span class="check-text">
               <span class="check-label">Auto-confirm on Enter</span>
               <span class="check-hint">
                 Pressing Enter to move to the next line will also mark the current line as confirmed.
+              </span>
+            </span>
+          </label>
+        {:else}
+          <label class="check-row">
+            <input type="checkbox" bind:checked={draftApp.partialSearch} />
+            <span class="check-text">
+              <span class="check-label">Partial search</span>
+              <span class="check-hint">
+                Always use prefix matching instead of prioritizing exact matches. Applies to JMdict and Wiktionary
+                (Japanese entries only).
               </span>
             </span>
           </label>

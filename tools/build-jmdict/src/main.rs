@@ -55,8 +55,8 @@ fn build_jmdict(xml_path: &str, db_path: &PathBuf) -> Result<()> {
 
   conn.execute_batch(
     "CREATE TABLE entries (ent_seq INTEGER PRIMARY KEY, priority INTEGER NOT NULL DEFAULT 999);
-     CREATE TABLE kanji (ent_seq INTEGER, keb TEXT, inf TEXT);
-     CREATE TABLE readings (ent_seq INTEGER, reb TEXT, inf TEXT);
+     CREATE TABLE kanji (ent_seq INTEGER, keb TEXT COLLATE NOCASE, inf TEXT);
+     CREATE TABLE readings (ent_seq INTEGER, reb TEXT COLLATE NOCASE, inf TEXT);
      CREATE TABLE senses (ent_seq INTEGER, sense_id INTEGER, pos TEXT, misc TEXT);
      CREATE TABLE glosses (ent_seq INTEGER, sense_id INTEGER, gloss TEXT);
      CREATE TABLE xrefs (ent_seq INTEGER, sense_id INTEGER, xref TEXT);

@@ -75,22 +75,67 @@ impl WiktDb {
     Ok(Self { db })
   }
 
-  pub fn lookup(&self, term: &str) -> Result<WiktResult, WiktError> {
-    let mut stmt = self
-      .db
-      .prepare_cached("SELECT id, word, pos, lang_code, sort_group, reading, romaji, ipa FROM words WHERE word = ?1 ORDER BY sort_group, pos")?;
-    let rows = stmt.query_map([term], |row| self.row_to_word(row))?;
-    let mut entries = Vec::new();
-    for row in rows {
-      let mut entry = row?;
-      entry.senses = self.load_senses(entry.id)?;
-      entry.relations = self.load_relations(entry.id, None)?;
-      entries.push(entry);
+  pub fn lookup(&self, term: &str, partial: bool) -> Result<WiktResult, WiktError> {
+    let variants = crate::util::kana_variants(term);
+    let mut entries = if partial {
+      self.lookup_partial(term)?
+    } else {
+      self.lookup_exact(term)?
+    };
+    for v in &variants {
+      let extra = if partial {
+        self.lookup_partial(v)?
+      } else {
+        self.lookup_exact(v)?
+      };
+      for e in extra {
+        if !entries.iter().any(|existing| existing.id == e.id) {
+          entries.push(e);
+        }
+      }
     }
     Ok(WiktResult {
       term: term.to_string(),
       entries,
     })
+  }
+
+  fn lookup_exact(&self, term: &str) -> Result<Vec<WiktWordEntry>, WiktError> {
+    let mut stmt = self
+      .db
+      .prepare_cached("SELECT id, word, pos, lang_code, sort_group, reading, romaji, ipa FROM words WHERE word = ?1 ORDER BY sort_group, pos")?;
+    let ids: Vec<i64> = stmt
+      .query_map([term], |row| row.get(0))?
+      .collect::<Result<Vec<_>, _>>()?;
+    self.load_word_entries(&ids)
+  }
+
+  fn lookup_partial(&self, term: &str) -> Result<Vec<WiktWordEntry>, WiktError> {
+    let pattern = format!("{}%", term);
+    let mut stmt = self.db.prepare_cached(
+      "SELECT id FROM words \
+       WHERE (word LIKE ?1 AND lang_code = 'ja') OR word = ?2 \
+       ORDER BY word, sort_group, pos \
+       LIMIT 50",
+    )?;
+    let ids: Vec<i64> = stmt
+      .query_map(rusqlite::params![pattern, term], |row| row.get(0))?
+      .collect::<Result<Vec<_>, _>>()?;
+    self.load_word_entries(&ids)
+  }
+
+  fn load_word_entries(&self, ids: &[i64]) -> Result<Vec<WiktWordEntry>, WiktError> {
+    let mut stmt = self
+      .db
+      .prepare_cached("SELECT id, word, pos, lang_code, sort_group, reading, romaji, ipa FROM words WHERE id = ?1")?;
+    let mut entries = Vec::new();
+    for &id in ids {
+      let mut entry = stmt.query_row([id], |row| self.row_to_word(row))?;
+      entry.senses = self.load_senses(entry.id)?;
+      entry.relations = self.load_relations(entry.id, None)?;
+      entries.push(entry);
+    }
+    Ok(entries)
   }
 
   fn row_to_word(&self, row: &rusqlite::Row) -> rusqlite::Result<WiktWordEntry> {
@@ -200,7 +245,7 @@ mod tests {
       return;
     }
     let db = WiktDb::open(&db_path).unwrap();
-    let result = db.lookup("食べる").unwrap();
+    let result = db.lookup("食べる", false).unwrap();
     assert!(!result.entries.is_empty());
     assert_eq!(result.entries[0].word, "食べる");
     assert_eq!(result.entries[0].pos, "verb");
@@ -216,7 +261,7 @@ mod tests {
       return;
     }
     let db = WiktDb::open(&db_path).unwrap();
-    let result = db.lookup("月").unwrap();
+    let result = db.lookup("月", false).unwrap();
     assert!(result.entries.len() >= 9);
 
     let etym4 = result
@@ -243,7 +288,7 @@ mod tests {
       return;
     }
     let db = WiktDb::open(&db_path).unwrap();
-    let result = db.lookup("zzzznonexistent").unwrap();
+    let result = db.lookup("zzzznonexistent", false).unwrap();
     assert!(result.entries.is_empty());
   }
 }

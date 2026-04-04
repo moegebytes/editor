@@ -6,6 +6,7 @@ mod jmdict;
 mod kanjidic;
 mod logging;
 mod project;
+mod settings;
 mod strings;
 mod util;
 mod wiktionary;
@@ -35,6 +36,7 @@ fn main() {
     .manage(commands::KanjidicState(Mutex::new(None)))
     .manage(commands::ProjectState(Mutex::new(None)))
     .manage(commands::WiktState(Mutex::new(None)))
+    .manage(commands::AppSettingsState(Mutex::new(settings::AppSettings::default())))
     .invoke_handler(tauri::generate_handler![
       commands::save_translation,
       commands::lookup_jmdict,
@@ -55,6 +57,8 @@ fn main() {
       commands::import_project,
       commands::open_app_dir,
       commands::lookup_wiktionary,
+      commands::get_app_settings,
+      commands::update_app_settings,
       commands::get_environment_info,
     ])
     .setup(|app| {
@@ -68,6 +72,11 @@ fn main() {
         e
       })?;
       app.manage(commands::DataDir(config_dir.clone()));
+
+      let loaded_settings = settings::load(&config_dir);
+      let settings_state = app.state::<commands::AppSettingsState>();
+      *settings_state.0.lock().expect("AppSettings state lock poisoned") = loaded_settings;
+      info!("App settings loaded");
 
       let resource_dir = app.path().resource_dir()?;
       let jmdict_path = resource_dir.join(RES_JMDICT);

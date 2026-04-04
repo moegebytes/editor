@@ -92,7 +92,7 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
   conn.execute_batch(
     "CREATE TABLE words (
        id               INTEGER PRIMARY KEY,
-       word             TEXT NOT NULL,
+       word             TEXT NOT NULL COLLATE NOCASE,
        pos              TEXT NOT NULL,
        lang_code        TEXT,
        sort_group       INTEGER,
@@ -217,6 +217,10 @@ fn build_wiktionary(jsonl_path: &str, db_path: &PathBuf) -> Result<()> {
                 Some(t) if !t.is_empty() => t,
                 _ => continue,
               };
+              if text.contains('\n') {
+                eprintln!("  Warning: skipping example with newline in text for '{}'", entry.word);
+                continue;
+              }
               let english = ex.english.as_deref().or(ex.translation.as_deref());
               tx.execute(
                 "INSERT INTO examples (sense_id, text, english, romaji) VALUES (?1, ?2, ?3, ?4)",

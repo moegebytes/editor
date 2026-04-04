@@ -46,8 +46,12 @@ export interface Sense {
   xrefs: string[];
 }
 
-export interface ProjectSettings {
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface ProjectSettings {}
+
+export interface AppSettings {
   autoConfirmOnEnter: boolean;
+  partialSearch: boolean;
 }
 
 export interface ProjectFiles {

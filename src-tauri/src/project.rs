@@ -7,12 +7,10 @@ use uuid::Uuid;
 
 use crate::util::friendly_io_msg;
 
+#[allow(clippy::empty_structs_with_brackets)]
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectSettings {
-  #[serde(default)]
-  pub auto_confirm_on_enter: bool,
-}
+pub struct ProjectSettings {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectFiles {

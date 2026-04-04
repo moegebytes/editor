@@ -68,6 +68,7 @@ editor/
 │       ├── main.rs                  -- Tauri app setup, dictionary loading
 │       ├── commands.rs              -- IPC command handlers
 │       ├── logging.rs               -- Per-session file logger setup
+│       ├── settings.rs              -- App-wide settings persistence (settings.json)
 │       ├── project.rs               -- Project config persistence
 │       ├── strings.rs               -- Strings format parser/writer
 │       ├── core.rs                  -- File pairing, FlatEntry type, notes, reconstruction
@@ -126,9 +127,14 @@ Tools (Dictionary/Go to Line/Find & Replace), Help (About). Filter input (CTRL+F
 
 **Dictionary panel:** Two tabs: **JMdict** and **Wiktionary**. Shared search input with search button.
 Back/forward navigation (shared history, 100 entries max). Arrow buttons in header. JMdict tab: Vibrato tokenizes JP
-text, looks up tokens, inflection detection with base form navigation with results ordered by priority (ke_pri/re_pri).
+text, looks up tokens, inflection detection with base form navigation with results ordered by priority.
 Wiktionary tab: Entries grouped by etymology with senses, examples, synonyms, antonyms, coordinate terms, and other
-relations. External query changes auto-search both tabs and reset to JMdict tab.
+relations. External query changes auto-search both tabs and reset to JMdict tab. Optional partial (prefix) search skips
+exact-match-first behavior (configurable in settings).
+
+**Settings:** Three tabs: **Project**, **Editor**, **Dictionary**.
+Project tab controls per-project settings (`ProjectSettings`). Other tabs control app-wide settings (`AppSettings`,
+persisted in `settings.json`).
 
 **Find & Replace (Ctrl+H):** Searches EN text in filtered entries. Real-time match count, navigate Enter/Shift+Enter,
 replace current or all.
@@ -171,13 +177,19 @@ import_project(source_path, name, files: {jp, en}) -> ProjectWithEntries
 
 ### Dictionary
 ```
-lookup_word(query) -> LookupResult { entries, inflections }
+lookup_jmdict(query) -> LookupResult { entries, inflections }
 lookup_kanji(ch) -> Option<KanjiEntry>
 ```
 
 ### Wiktionary
 ```
 lookup_wiktionary(term) -> WiktResult { term, entries: Vec<WiktWordEntry> }
+```
+
+### App settings
+```
+get_app_settings() -> AppSettings { autoConfirmOnEnter, partialSearch }
+update_app_settings(settings) -> ()
 ```
 
 ### Environment

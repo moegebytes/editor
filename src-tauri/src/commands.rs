@@ -10,6 +10,7 @@ use crate::core::FlatEntry;
 use crate::jmdict::{JmdictDb, LookupResult};
 use crate::kanjidic::{KanjiDb, KanjiEntry};
 use crate::project::{self, Project, ProjectFiles, ProjectSettings, RecentProject};
+use crate::settings::AppSettings;
 use crate::wiktionary::{WiktDb, WiktResult};
 
 #[derive(Debug, Clone, Serialize)]
@@ -52,6 +53,7 @@ pub struct OpenProject {
 
 pub struct ProjectState(pub Mutex<Option<OpenProject>>);
 pub struct WiktState(pub Mutex<Option<WiktDb>>);
+pub struct AppSettingsState(pub Mutex<AppSettings>);
 
 impl JmdictState {
   fn with_db<T>(&self, f: impl FnOnce(&JmdictDb) -> Result<T, String>) -> Result<T, String> {
@@ -140,9 +142,14 @@ pub fn save_translation(entries: Vec<FlatEntry>, state: State<'_, ProjectState>)
 }
 
 #[tauri::command]
-pub fn lookup_jmdict(query: String, state: State<'_, JmdictState>) -> Result<LookupResult, String> {
+pub fn lookup_jmdict(
+  query: String,
+  state: State<'_, JmdictState>,
+  app_settings: State<'_, AppSettingsState>,
+) -> Result<LookupResult, String> {
+  let partial = app_settings.0.lock().map_err(|e| e.to_string())?.partial_search;
   state.with_db(|db| {
-    db.lookup(&query).map_err(|e| {
+    db.lookup(&query, partial).map_err(|e| {
       error!("Dictionary lookup failed for '{}': {}", query, e);
       e.to_string()
     })
@@ -161,9 +168,14 @@ pub fn lookup_kanji(ch: String, state: State<'_, KanjidicState>) -> Result<Optio
 }
 
 #[tauri::command]
-pub fn lookup_wiktionary(term: String, state: State<'_, WiktState>) -> Result<WiktResult, String> {
+pub fn lookup_wiktionary(
+  term: String,
+  state: State<'_, WiktState>,
+  app_settings: State<'_, AppSettingsState>,
+) -> Result<WiktResult, String> {
+  let partial = app_settings.0.lock().map_err(|e| e.to_string())?.partial_search;
   state.with_db(|db| {
-    db.lookup(&term).map_err(|e| {
+    db.lookup(&term, partial).map_err(|e| {
       error!("Wiktionary lookup failed for '{}': {}", term, e);
       e.to_string()
     })
@@ -341,6 +353,24 @@ pub fn open_app_dir(app: AppHandle, data_dir: State<'_, DataDir>) -> Result<(), 
     .opener()
     .open_path(&*data_dir.0.to_string_lossy(), None::<&str>)
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_app_settings(state: State<'_, AppSettingsState>) -> Result<AppSettings, String> {
+  let lock = state.0.lock().map_err(|e| e.to_string())?;
+  Ok(lock.clone())
+}
+
+#[tauri::command]
+pub fn update_app_settings(
+  settings: AppSettings,
+  data_dir: State<'_, DataDir>,
+  state: State<'_, AppSettingsState>,
+) -> Result<(), String> {
+  crate::settings::save(&data_dir.0, &settings)?;
+  let mut lock = state.0.lock().map_err(|e| e.to_string())?;
+  *lock = settings;
+  Ok(())
 }
 
 #[tauri::command]

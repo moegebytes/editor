@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import type {
+  AppSettings,
   EnvironmentInfo,
   FlatEntry,
   ImportPreview,
@@ -115,6 +116,14 @@ export async function importProject(sourcePath: string, name: string, files: Pro
 
 export async function openAppDir(): Promise<void> {
   return invoke('open_app_dir');
+}
+
+export async function getAppSettings(): Promise<AppSettings> {
+  return invoke('get_app_settings');
+}
+
+export async function updateAppSettings(settings: AppSettings): Promise<void> {
+  return invoke('update_app_settings', { settings });
 }
 
 export async function getEnvironmentInfo(): Promise<EnvironmentInfo> {

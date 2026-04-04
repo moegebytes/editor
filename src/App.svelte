@@ -1,13 +1,15 @@
 <script lang="ts">
-  import type { FlatEntry, ProjectFiles, ProjectSettings } from './lib/types';
+  import type { AppSettings, FlatEntry, ProjectFiles, ProjectSettings } from './lib/types';
   import { isText, isUntranslated, isTranslated } from './lib/utils';
   import {
     confirmLine,
     createProject,
     exportProject,
     exportProjectDialog,
+    getAppSettings,
     importProject,
     openProject,
+    updateAppSettings,
     updateProject,
     saveTranslation,
     saveProject,
@@ -34,7 +36,8 @@
   let projectName: string | null = $state(null);
   let projectFiles: ProjectFiles = $state({ jp: '', en: '' });
   let confirmedLines = new SvelteSet<number>();
-  let projectSettings: ProjectSettings = $state({ autoConfirmOnEnter: false });
+  let projectSettings: ProjectSettings = $state({});
+  let appSettings: AppSettings = $state({ autoConfirmOnEnter: false, partialSearch: false });
   let settingsVisible = $state(false);
   let goToLineVisible = $state(false);
   let aboutVisible = $state(false);
@@ -137,12 +140,14 @@
     }
   }
 
-  async function handleUpdateProject(name: string, settings: ProjectSettings) {
+  async function handleUpdateProject(name: string, settings: ProjectSettings, newAppSettings: AppSettings) {
     if (!projectId) return;
     try {
       await updateProject(projectId, name, projectFiles, settings);
+      await updateAppSettings(newAppSettings);
       projectName = name;
       projectSettings = settings;
+      appSettings = newAppSettings;
       toast.success('Settings saved');
     } catch (e) {
       toast.error(`Failed to save settings: ${e}`);
@@ -252,7 +257,7 @@
     projectFiles = { jp: '', en: '' };
     entries = [];
     confirmedLines.clear();
-    projectSettings = { autoConfirmOnEnter: false };
+    projectSettings = {};
     modified = false;
     selectedIndex = -1;
     filterText = '';
@@ -278,6 +283,9 @@
       });
     }
   });
+
+  // Load app settings on startup
+  getAppSettings().then((s) => (appSettings = s));
 
   // Find/replace logic
   function computeFindMatches(query: string) {
@@ -401,6 +409,7 @@
       projectName={projectName ?? ''}
       files={projectFiles}
       bind:settings={projectSettings}
+      bind:appSettings
       onBack={() => (settingsVisible = false)}
       onSave={handleUpdateProject}
     />
@@ -434,7 +443,7 @@
           onNotesChange={handleNotesChange}
           onJumpNextUnconfirmed={jumpToNextUnconfirmed}
           {confirmedLines}
-          autoConfirmOnEnter={projectSettings.autoConfirmOnEnter}
+          autoConfirmOnEnter={appSettings.autoConfirmOnEnter}
           bind:selectedIndex
           onSave={handleSave}
           onJpSelect={handleJpSelect}
