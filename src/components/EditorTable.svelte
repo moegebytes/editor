@@ -39,16 +39,21 @@
     currentFindMatch?: number;
   } = $props();
 
+  const ROW_HEIGHT = 32;
+
   let scrollElement: HTMLDivElement | undefined = $state();
   let collapsedIncludes = new SvelteSet<number>();
+  let lastScrolledTo = -1;
+  let skipAutoFocus = false;
+
+  // Notes
   let expandedNotes: number | null = $state(null);
   let notesDraft: string = $state('');
-
-  const ROW_HEIGHT = 32;
+  let discardNotesVisible = $state(false);
+  let pendingNotesTarget: number | null = $state(null);
 
   let filterLower = $derived(filterText.toLowerCase());
 
-  // Pre-compute set of include filenames for reference validation
   let includeNames = $derived(
     new Set(entries.filter((e) => e.entryType === 'include').map((e) => getFileName(e.jpText ?? e.enText ?? ''))),
   );
@@ -82,8 +87,15 @@
     return result;
   });
 
-  let lastScrolledTo = -1;
-  let skipAutoFocus = false;
+  let virtualizer = $derived(
+    createVirtualizer({
+      count: visibleEntries.length,
+      getScrollElement: scrollElement ? () => scrollElement as Element : () => null,
+      estimateSize: () => ROW_HEIGHT,
+      overscan: 20,
+    }),
+  );
+
   $effect(() => {
     if (selectedIndex >= 0 && selectedIndex !== lastScrolledTo) {
       lastScrolledTo = selectedIndex;
@@ -101,15 +113,6 @@
     }
   });
 
-  let virtualizer = $derived(
-    createVirtualizer({
-      count: visibleEntries.length,
-      getScrollElement: scrollElement ? () => scrollElement as Element : () => null,
-      estimateSize: () => ROW_HEIGHT,
-      overscan: 20,
-    }),
-  );
-
   function measureRow(node: HTMLElement) {
     $virtualizer.measureElement(node);
   }
@@ -124,8 +127,50 @@
     return count;
   }
 
-  let discardNotesVisible = $state(false);
-  let pendingNotesTarget: number | null = $state(null);
+  function toggleCollapse(entryIndex: number) {
+    if (collapsedIncludes.has(entryIndex)) {
+      collapsedIncludes.delete(entryIndex);
+    } else {
+      collapsedIncludes.add(entryIndex);
+    }
+  }
+
+  function isRefBroken(refPath: string): boolean {
+    return !includeNames.has(getFileName(refPath));
+  }
+
+  async function jumpToInclude(refPath: string) {
+    const refName = getFileName(refPath);
+    const target = entries.find((e) => {
+      if (e.entryType !== 'include') return false;
+      const incPath = e.jpText ?? e.enText ?? '';
+      return getFileName(incPath) === refName || incPath === refPath;
+    });
+    if (!target) return;
+
+    // Walk backwards from the target to find all ancestor includes that are collapsed.
+    // An ancestor include is one that appears before the target at a strictly lower depth
+    // and whose child range spans the target.
+    let needsUncollapse = false;
+    for (let i = target.index - 1; i >= 0; i--) {
+      const entry = entries[i];
+      if (entry.entryType !== 'include') continue;
+      if (entry.depth >= target.depth) continue;
+      if (collapsedIncludes.has(entry.index)) {
+        collapsedIncludes.delete(entry.index);
+        needsUncollapse = true;
+      }
+      if (entry.depth === 0) break;
+    }
+
+    if (needsUncollapse) await tick();
+
+    const visIdx = visibleEntries.findIndex((e) => e.index === target.index);
+    if (visIdx >= 0) {
+      selectedIndex = target.index;
+      $virtualizer.scrollToIndex(visIdx, { align: 'center' });
+    }
+  }
 
   function hasUnsavedNotes(): boolean {
     if (expandedNotes === null) return false;
@@ -178,51 +223,6 @@
     const lines = notesDraft.split('\n').filter((l) => l.trim() !== '');
     onNotesChange?.(entryIndex, lines);
     expandedNotes = null;
-  }
-
-  function toggleCollapse(entryIndex: number) {
-    if (collapsedIncludes.has(entryIndex)) {
-      collapsedIncludes.delete(entryIndex);
-    } else {
-      collapsedIncludes.add(entryIndex);
-    }
-  }
-
-  function isRefBroken(refPath: string): boolean {
-    return !includeNames.has(getFileName(refPath));
-  }
-
-  async function jumpToInclude(refPath: string) {
-    const refName = getFileName(refPath);
-    const target = entries.find((e) => {
-      if (e.entryType !== 'include') return false;
-      const incPath = e.jpText ?? e.enText ?? '';
-      return getFileName(incPath) === refName || incPath === refPath;
-    });
-    if (!target) return;
-
-    // Walk backwards from the target to find all ancestor includes that are collapsed.
-    // An ancestor include is one that appears before the target at a strictly lower depth
-    // and whose child range spans the target.
-    let needsUncollapse = false;
-    for (let i = target.index - 1; i >= 0; i--) {
-      const entry = entries[i];
-      if (entry.entryType !== 'include') continue;
-      if (entry.depth >= target.depth) continue;
-      if (collapsedIncludes.has(entry.index)) {
-        collapsedIncludes.delete(entry.index);
-        needsUncollapse = true;
-      }
-      if (entry.depth === 0) break;
-    }
-
-    if (needsUncollapse) await tick();
-
-    const visIdx = visibleEntries.findIndex((e) => e.index === target.index);
-    if (visIdx >= 0) {
-      selectedIndex = target.index;
-      $virtualizer.scrollToIndex(visIdx, { align: 'center' });
-    }
   }
 
   function rowClass(entry: FlatEntry): string {
@@ -387,9 +387,6 @@
             findMatchIndices[currentFindMatch] === entry.index}
           style:position="absolute"
           style:top="{row.start}px"
-          style:height={expandedNotes === entry.index || (isText(entry) && entry.index === selectedIndex)
-            ? 'auto'
-            : `${ROW_HEIGHT}px`}
           style:min-height="{ROW_HEIGHT}px"
           style:left="0"
           style:right="0"
@@ -711,7 +708,6 @@
     width: 100%;
     padding: 8px 12px 8px 70px;
     background: var(--color-surface);
-    border-top: 1px solid var(--color-accent);
 
     .notes-textarea {
       width: 100%;

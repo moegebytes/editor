@@ -39,6 +39,7 @@ editor/
 │   │   ├── types.ts                 -- Types for IPC
 │   │   ├── ipc.ts                   -- Tauri invoke wrappers
 │   │   ├── utils.ts                 -- Shared utilities (entry predicates, set helpers, kanji detection)
+│   │   ├── debounced.svelte.ts      -- useDebouncedValue rune helper
 │   │   └── toast.svelte.ts          -- Toast notification store (Svelte 5 runes module)
 │   └── components/
 │       ├── ui/

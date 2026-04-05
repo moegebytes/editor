@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ChevronUpIcon, ChevronDownIcon, XIcon } from '@lucide/svelte';
+  import { useDebouncedValue } from '../lib/debounced.svelte';
 
   let {
     visible = $bindable(false),
@@ -31,9 +32,8 @@
     }
   });
 
-  function handleFindInput() {
-    onFind(findText);
-  }
+  const debouncedFindText = useDebouncedValue(() => findText, 150);
+  $effect(() => onFind(debouncedFindText.value));
 
   function handleFindKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') {
@@ -74,7 +74,6 @@
       placeholder="Find..."
       bind:value={findText}
       bind:this={findInput}
-      oninput={handleFindInput}
       onkeydown={handleFindKeydown}
       class="find-input"
     />

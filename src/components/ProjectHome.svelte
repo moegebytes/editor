@@ -47,14 +47,33 @@
 
   getVersion().then((v) => (appVersion = v));
 
+  $effect(() => {
+    refreshLists();
+  });
+
   function refreshLists() {
     listRecentProjects().then((r) => (recentProjects = r));
     listAllProjects().then((r) => (allProjects = r));
   }
 
-  $effect(() => {
-    refreshLists();
-  });
+  function resetForm() {
+    newName = '';
+    newJpPath = '';
+    newEnPath = '';
+    formError = '';
+    importSourcePath = '';
+    editTarget = null;
+  }
+
+  function closeForm() {
+    showNewForm = false;
+    resetForm();
+  }
+
+  function showNew() {
+    resetForm();
+    showNewForm = true;
+  }
 
   async function handlePickJp() {
     const path = await openFileDialog(newJpPath || undefined);
@@ -84,6 +103,23 @@
       onImportProject(importSourcePath, newName.trim(), newJpPath, newEnPath);
     } else {
       onNewProject(newName.trim(), newJpPath, newEnPath);
+    }
+  }
+
+  async function handleImport() {
+    const path = await importProjectDialog();
+    if (!path) return;
+    try {
+      const preview = await previewImport(path);
+      importSourcePath = path;
+      newName = preview.name;
+      newJpPath = '';
+      newEnPath = '';
+      formError = '';
+      showNewForm = true;
+    } catch (e) {
+      formError = `${e}`;
+      showNewForm = true;
     }
   }
 
@@ -127,42 +163,6 @@
       toast.success('Project updated');
     } catch (err) {
       formError = `${err}`;
-    }
-  }
-
-  function resetForm() {
-    newName = '';
-    newJpPath = '';
-    newEnPath = '';
-    formError = '';
-    importSourcePath = '';
-    editTarget = null;
-  }
-
-  function closeForm() {
-    showNewForm = false;
-    resetForm();
-  }
-
-  function showNew() {
-    resetForm();
-    showNewForm = true;
-  }
-
-  async function handleImport() {
-    const path = await importProjectDialog();
-    if (!path) return;
-    try {
-      const preview = await previewImport(path);
-      importSourcePath = path;
-      newName = preview.name;
-      newJpPath = '';
-      newEnPath = '';
-      formError = '';
-      showNewForm = true;
-    } catch (e) {
-      formError = `${e}`;
-      showNewForm = true;
     }
   }
 
@@ -407,20 +407,18 @@
     .item-action {
       flex-shrink: 0;
       align-self: stretch;
-      display: flex;
+      display: none;
       align-items: center;
       border-radius: 0;
       padding: 0 6px;
-      opacity: 0;
-      transition: opacity 0.1s;
-
-      &:hover {
-        opacity: 1 !important;
-      }
 
       &.delete-action:hover {
         color: var(--color-danger-light);
       }
+    }
+
+    &:hover .item-action {
+      display: flex;
     }
   }
 

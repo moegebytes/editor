@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { AppSettings, FlatEntry, ProjectFiles, ProjectSettings } from './lib/types';
   import { isText, isUntranslated, isTranslated } from './lib/utils';
+  import { useDebouncedValue } from './lib/debounced.svelte';
   import {
     confirmLine,
     createProject,
@@ -31,7 +32,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import ToastContainer from './components/ui/ToastContainer.svelte';
 
-  // Project state
+  // Project
   let projectId: string | null = $state(null);
   let projectName: string | null = $state(null);
   let projectFiles: ProjectFiles = $state({ jp: '', en: '' });
@@ -42,19 +43,21 @@
   let goToLineVisible = $state(false);
   let aboutVisible = $state(false);
 
-  // Editor state
+  // Editor
   let entries: FlatEntry[] = $state([]);
   let modified = $state(false);
   let loading = $state(false);
   let saving = $state(false);
   let selectedIndex = $state(-1);
 
-  // Dictionary state
+  // Dictionary
   let dictVisible = $state(false);
   let dictQuery = $state('');
+  let dictQuerySeq = $state(0);
 
-  // Filter state
+  // Filter
   let filterText = $state('');
+  const debouncedFilter = useDebouncedValue(() => filterText, 150);
   let findReplaceVisible = $state(false);
   let findQuery = $state('');
   let findMatchIndices: number[] = $state([]);
@@ -64,6 +67,32 @@
   // Unsaved changes dialog
   let unsavedDialogVisible = $state(false);
   let pendingAction: (() => void) | null = null;
+  let closingConfirmed = false;
+
+  let stats = $derived({
+    totalText: entries.filter(isText).length,
+    translated: entries.filter(isTranslated).length,
+    confirmed: entries.filter((e) => isText(e) && confirmedLines.has(e.index)).length,
+  });
+
+  let hasProject = $derived(projectName !== null);
+
+  getAppSettings().then((s) => (appSettings = s));
+
+  getCurrentWindow().onCloseRequested((event) => {
+    if (modified && !closingConfirmed) {
+      event.preventDefault();
+      guardUnsaved(() => {
+        closingConfirmed = true;
+        getCurrentWindow().close();
+      });
+    }
+  });
+
+  $effect(() => {
+    void debouncedFilter.value;
+    if (findQuery) computeFindMatches(findQuery);
+  });
 
   function guardUnsaved(action: () => void) {
     if (modified) {
@@ -87,14 +116,6 @@
     pendingAction = null;
     action?.();
   }
-
-  let stats = $derived({
-    totalText: entries.filter(isText).length,
-    translated: entries.filter(isTranslated).length,
-    confirmed: entries.filter((e) => isText(e) && confirmedLines.has(e.index)).length,
-  });
-
-  let hasProject = $derived(projectName !== null);
 
   function applyProject(proj: import('./lib/types').Project) {
     projectId = proj.id;
@@ -180,34 +201,24 @@
     }
   }
 
-  function jumpToNext(predicate: (e: FlatEntry) => boolean) {
-    const start = selectedIndex >= 0 ? selectedIndex : -1;
-    for (let i = start + 1; i < entries.length; i++) {
-      if (predicate(entries[i])) {
-        selectedIndex = entries[i].index;
-        return;
-      }
-    }
-    for (let i = 0; i <= start; i++) {
-      if (predicate(entries[i])) {
-        selectedIndex = entries[i].index;
-        return;
-      }
-    }
+  function doCloseProject() {
+    projectId = null;
+    projectName = null;
+    projectFiles = { jp: '', en: '' };
+    entries = [];
+    confirmedLines.clear();
+    projectSettings = {};
+    modified = false;
+    selectedIndex = -1;
+    filterText = '';
+    findReplaceVisible = false;
+    findQuery = '';
+    findMatchIndices = [];
+    currentFindMatch = -1;
   }
 
-  function jumpToNextUntranslated() {
-    jumpToNext(isUntranslated);
-  }
-
-  function jumpToNextUnconfirmed() {
-    jumpToNext((e) => isTranslated(e) && !confirmedLines.has(e.index));
-  }
-
-  function confirmToggleCurrent() {
-    if (selectedIndex >= 0) {
-      handleToggleConfirm(selectedIndex);
-    }
+  function handleCloseProject() {
+    guardUnsaved(doCloseProject);
   }
 
   function handleEnTextChange(index: number, newText: string) {
@@ -243,7 +254,42 @@
     modified = true;
   }
 
-  let dictQuerySeq = $state(0);
+  function jumpToNext(predicate: (e: FlatEntry) => boolean) {
+    const start = selectedIndex >= 0 ? selectedIndex : -1;
+    for (let i = start + 1; i < entries.length; i++) {
+      if (predicate(entries[i])) {
+        selectedIndex = entries[i].index;
+        return;
+      }
+    }
+    for (let i = 0; i <= start; i++) {
+      if (predicate(entries[i])) {
+        selectedIndex = entries[i].index;
+        return;
+      }
+    }
+  }
+
+  function jumpToNextUntranslated() {
+    jumpToNext(isUntranslated);
+  }
+
+  function jumpToNextUnconfirmed() {
+    jumpToNext((e) => isTranslated(e) && !confirmedLines.has(e.index));
+  }
+
+  function confirmToggleCurrent() {
+    if (selectedIndex >= 0) {
+      handleToggleConfirm(selectedIndex);
+    }
+  }
+
+  function handleGoToLine(line: number) {
+    const idx = line - 1;
+    if (idx >= 0 && idx < entries.length) {
+      selectedIndex = entries[idx].index;
+    }
+  }
 
   function handleJpSelect(text: string) {
     dictQuery = text;
@@ -251,43 +297,6 @@
     dictVisible = true;
   }
 
-  function doCloseProject() {
-    projectId = null;
-    projectName = null;
-    projectFiles = { jp: '', en: '' };
-    entries = [];
-    confirmedLines.clear();
-    projectSettings = {};
-    modified = false;
-    selectedIndex = -1;
-    filterText = '';
-    findReplaceVisible = false;
-    findQuery = '';
-    findMatchIndices = [];
-    currentFindMatch = -1;
-  }
-
-  function handleCloseProject() {
-    guardUnsaved(doCloseProject);
-  }
-
-  // Intercept window close to warn about unsaved changes
-  let closingConfirmed = false;
-
-  getCurrentWindow().onCloseRequested((event) => {
-    if (modified && !closingConfirmed) {
-      event.preventDefault();
-      guardUnsaved(() => {
-        closingConfirmed = true;
-        getCurrentWindow().close();
-      });
-    }
-  });
-
-  // Load app settings on startup
-  getAppSettings().then((s) => (appSettings = s));
-
-  // Find/replace logic
   function computeFindMatches(query: string) {
     findQuery = query;
     if (!query) {
@@ -296,7 +305,7 @@
       return;
     }
     const lower = query.toLowerCase();
-    const fLower = filterText.toLowerCase();
+    const fLower = debouncedFilter.value.toLowerCase();
     const matches: number[] = [];
     for (const entry of entries) {
       if (!isText(entry)) continue;
@@ -340,9 +349,10 @@
   function replaceAll(query: string, replacement: string) {
     if (!query) return;
     const lower = query.toLowerCase();
+    const matchSet = new Set(findMatchIndices);
     let count = 0;
     for (const entry of entries) {
-      if (entry.entryType !== 'text' || !entry.enText) continue;
+      if (!matchSet.has(entry.index) || !entry.enText) continue;
       const en = entry.enText;
       let result = '';
       let i = 0;
@@ -384,12 +394,9 @@
       goToLineVisible = true;
       return;
     }
-  }
-
-  function handleGoToLine(line: number) {
-    const idx = line - 1;
-    if (idx >= 0 && idx < entries.length) {
-      selectedIndex = entries[idx].index;
+    if ((e.ctrlKey && e.key === 'r') || e.key === 'F5') {
+      e.preventDefault();
+      return;
     }
   }
 </script>
@@ -447,7 +454,7 @@
           bind:selectedIndex
           onSave={handleSave}
           onJpSelect={handleJpSelect}
-          {filterText}
+          filterText={debouncedFilter.value}
           {findQuery}
           {findMatchIndices}
           {currentFindMatch}

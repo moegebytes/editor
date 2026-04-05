@@ -21,13 +21,35 @@
 
   let searchInput = $state('');
   let activeTab: 'dict' | 'wikt' = $state('dict');
-
   let dictTab: JmdictTab | undefined = $state();
   let wiktTab: WiktTab | undefined = $state();
-
   let history: string[] = $state([]);
   let historyIndex = $state(-1);
   let navigating = false;
+  let lastSeq = -1;
+  let resizeCleanup: (() => void) | null = null;
+
+  let navCanGoBack = $derived(historyIndex > 0);
+  let navCanGoForward = $derived(historyIndex < history.length - 1);
+
+  $effect(() => {
+    if (!visible) clearState();
+  });
+
+  $effect(() => {
+    if (query && querySeq !== lastSeq) {
+      lastSeq = querySeq;
+      searchInput = query;
+      activeTab = 'dict';
+      pushHistory(query);
+      dictTab?.lookup(query);
+      wiktTab?.lookup(query);
+    }
+  });
+
+  $effect(() => {
+    return () => resizeCleanup?.();
+  });
 
   function pushHistory(q: string) {
     const trimmed = q.trim();
@@ -45,42 +67,21 @@
     historyIndex = history.length - 1;
   }
 
-  function clearState() {
-    searchInput = '';
-    activeTab = 'dict';
-    dictTab?.clear();
-    wiktTab?.clear();
-    history = [];
-    historyIndex = -1;
+  function goBack() {
+    if (!navCanGoBack) return;
+    historyIndex--;
+    searchInput = history[historyIndex];
+    navigating = true;
+    triggerSearch();
   }
 
-  function close() {
-    clearState();
-    visible = false;
+  function goForward() {
+    if (!navCanGoForward) return;
+    historyIndex++;
+    searchInput = history[historyIndex];
+    navigating = true;
+    triggerSearch();
   }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && visible && !e.defaultPrevented) {
-      e.preventDefault();
-      close();
-    }
-  }
-
-  $effect(() => {
-    if (!visible) clearState();
-  });
-
-  let lastSeq = -1;
-  $effect(() => {
-    if (query && querySeq !== lastSeq) {
-      lastSeq = querySeq;
-      searchInput = query;
-      activeTab = 'dict';
-      pushHistory(query);
-      dictTab?.lookup(query);
-      wiktTab?.lookup(query);
-    }
-  });
 
   function triggerSearch() {
     pushHistory(searchInput);
@@ -102,30 +103,19 @@
     wiktTab?.lookup(term);
   }
 
-  let navCanGoBack = $derived(historyIndex > 0);
-  let navCanGoForward = $derived(historyIndex < history.length - 1);
-
-  function goBack() {
-    if (!navCanGoBack) return;
-    historyIndex--;
-    searchInput = history[historyIndex];
-    navigating = true;
-    triggerSearch();
+  function clearState() {
+    searchInput = '';
+    activeTab = 'dict';
+    dictTab?.clear();
+    wiktTab?.clear();
+    history = [];
+    historyIndex = -1;
   }
 
-  function goForward() {
-    if (!navCanGoForward) return;
-    historyIndex++;
-    searchInput = history[historyIndex];
-    navigating = true;
-    triggerSearch();
+  function close() {
+    clearState();
+    visible = false;
   }
-
-  let resizeCleanup: (() => void) | null = null;
-
-  $effect(() => {
-    return () => resizeCleanup?.();
-  });
 
   function startResize(e: MouseEvent) {
     e.preventDefault();
@@ -148,6 +138,13 @@
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     resizeCleanup = onUp;
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && visible && !e.defaultPrevented) {
+      e.preventDefault();
+      close();
+    }
   }
 </script>
 
