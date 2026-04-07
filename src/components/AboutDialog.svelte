@@ -2,16 +2,20 @@
   import Dialog from './ui/Dialog.svelte';
   import { ChevronDownIcon, ChevronRightIcon } from '@lucide/svelte';
   import { getEnvironmentInfo } from '../lib/ipc';
-  import type { EnvironmentInfo } from '../lib/types';
+  import type { AppSettings, EnvironmentInfo, ProjectSettings } from '../lib/types';
 
   let {
     visible = $bindable(false),
     projectName = null,
     stats = null,
+    appSettings,
+    projectSettings = null,
   }: {
     visible?: boolean;
     projectName?: string | null;
     stats?: { totalText: number; translated: number; confirmed: number } | null;
+    appSettings: AppSettings;
+    projectSettings?: ProjectSettings | null;
   } = $props();
 
   let detailsOpen = $state(false);
@@ -29,20 +33,21 @@
   let detailsText = $derived.by(() => {
     if (!envInfo) return envError ?? 'Loading...';
     const lines: string[] = [
-      `App: ${envInfo.appName} ${envInfo.appVersion}`,
+      `App: ${envInfo.appName} ${envInfo.appVersion} (${envInfo.debug ? 'debug' : 'release'})`,
       `Tauri: ${envInfo.tauriVersion}`,
-      `Platform: ${envInfo.os} (${envInfo.arch})`,
-      `Variant: ${envInfo.debug ? 'debug' : 'release'}`,
+      `WebView: ${envInfo.webviewVersion}`,
+      `Platform: ${envInfo.os}`,
     ];
+    lines.push(`Settings: ${JSON.stringify(appSettings)}`);
     if (projectName) {
       lines.push('');
       lines.push(`Project: ${projectName}`);
       if (stats) {
         lines.push(`Entries: ${stats.totalText} total, ${stats.translated} translated, ${stats.confirmed} confirmed`);
       }
-    } else {
-      lines.push('');
-      lines.push('Project: (none)');
+      if (projectSettings) {
+        lines.push(`Settings: ${JSON.stringify(projectSettings)}`);
+      }
     }
     return lines.join('\n');
   });

@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
-import { open, save } from '@tauri-apps/plugin-dialog';
 import type {
   AppSettings,
+  AppSettingsResponse,
   EnvironmentInfo,
   FlatEntry,
   ImportPreview,
@@ -12,29 +12,14 @@ import type {
   ProjectInfo,
   ProjectSettings,
   RecentProject,
+  RecoveryData,
+  RecoveryEntry,
+  RecoveryInfo,
   WiktResult,
 } from './types';
 
 export async function saveTranslation(entries: FlatEntry[]): Promise<void> {
   return invoke('save_translation', { entries });
-}
-
-const STRINGS_FILTER = {
-  name: 'Strings files',
-  extensions: ['strings', 'txt'],
-};
-
-export async function openFileDialog(defaultPath?: string): Promise<string | null> {
-  return open({ filters: [STRINGS_FILTER], defaultPath });
-}
-
-const PROJECT_FILTER = {
-  name: 'Project files',
-  extensions: ['json'],
-};
-
-export async function exportProjectDialog(): Promise<string | null> {
-  return save({ filters: [PROJECT_FILTER] });
 }
 
 export async function lookupJmdict(query: string): Promise<LookupResult> {
@@ -59,6 +44,10 @@ export async function openProject(id: string): Promise<Project> {
 
 export async function saveProject(): Promise<void> {
   return invoke('save_project');
+}
+
+export async function closeProject(): Promise<void> {
+  return invoke('close_project');
 }
 
 export async function confirmLine(index: number): Promise<void> {
@@ -102,10 +91,6 @@ export async function updateProject(
   return invoke('update_project', { id, name, files, settings });
 }
 
-export async function importProjectDialog(): Promise<string | null> {
-  return open({ filters: [PROJECT_FILTER] });
-}
-
 export async function previewImport(sourcePath: string): Promise<ImportPreview> {
   return invoke('preview_import', { sourcePath });
 }
@@ -118,7 +103,7 @@ export async function openAppDir(): Promise<void> {
   return invoke('open_app_dir');
 }
 
-export async function getAppSettings(): Promise<AppSettings> {
+export async function getAppSettings(): Promise<AppSettingsResponse> {
   return invoke('get_app_settings');
 }
 
@@ -126,6 +111,26 @@ export async function updateAppSettings(settings: AppSettings): Promise<void> {
   return invoke('update_app_settings', { settings });
 }
 
+export async function logError(message: string, stack?: string): Promise<void> {
+  return invoke('log_error', { message, stack: stack ?? null });
+}
+
 export async function getEnvironmentInfo(): Promise<EnvironmentInfo> {
   return invoke('get_environment_info');
+}
+
+export async function writeRecovery(entries: Record<string, RecoveryEntry>): Promise<void> {
+  return invoke('write_recovery', { entries });
+}
+
+export async function checkRecovery(id: string): Promise<RecoveryInfo | null> {
+  return invoke('check_recovery', { id });
+}
+
+export async function loadRecovery(id: string): Promise<RecoveryData> {
+  return invoke('load_recovery', { id });
+}
+
+export async function deleteRecovery(id: string): Promise<void> {
+  return invoke('delete_recovery', { id });
 }

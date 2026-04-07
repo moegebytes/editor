@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use log::trace;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -43,6 +44,8 @@ impl KanjiDb {
   }
 
   pub fn lookup(&self, ch: char) -> Result<Option<KanjiEntry>, KanjidicError> {
+    trace!("KANJIDIC2 lookup for '{}'", ch);
+
     let literal = ch.to_string();
     let mut stmt = self
       .conn

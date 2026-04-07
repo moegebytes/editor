@@ -1,6 +1,7 @@
 <script lang="ts">
   import DropdownMenu from './ui/DropdownMenu.svelte';
   import type { MenuEntry } from './ui/DropdownMenu.svelte';
+  import { XIcon } from '@lucide/svelte';
 
   let {
     onSave,
@@ -11,6 +12,10 @@
     onJumpUntranslated,
     onJumpUnconfirmed,
     onConfirmToggle,
+    onUndo,
+    onRedo,
+    undoDisabled,
+    redoDisabled,
     onGoToLine,
     onOpenSettings,
     onAbout,
@@ -26,6 +31,10 @@
     onJumpUntranslated: () => void;
     onJumpUnconfirmed: () => void;
     onConfirmToggle: () => void;
+    onUndo: () => void;
+    onRedo: () => void;
+    undoDisabled: boolean;
+    redoDisabled: boolean;
     onGoToLine: () => void;
     onOpenSettings: () => void;
     onAbout: () => void;
@@ -60,6 +69,9 @@
   ]);
 
   let lineItems: MenuEntry[] = $derived([
+    { label: 'Undo', action: onUndo, disabled: undoDisabled, shortcut: 'Ctrl+Z' },
+    { label: 'Redo', action: onRedo, disabled: redoDisabled, shortcut: 'Ctrl+Y' },
+    { separator: true },
     { label: 'Next Untranslated', action: onJumpUntranslated, shortcut: 'Ctrl+\u2193' },
     { label: 'Next Unconfirmed', action: onJumpUnconfirmed, shortcut: 'Ctrl+Alt+\u2193' },
     { separator: true },
@@ -120,7 +132,14 @@
     </div>
   </div>
 
-  <input type="text" placeholder="Filter..." bind:value={filterText} bind:this={filterInput} class="filter-input" />
+  <div class="filter-wrapper">
+    <input type="text" placeholder="Filter..." bind:value={filterText} bind:this={filterInput} class="filter-input" />
+    {#if filterText}
+      <button class="filter-clear" onclick={() => (filterText = '')}>
+        <XIcon size={14} />
+      </button>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -164,11 +183,33 @@
     z-index: 99;
   }
 
+  .filter-wrapper {
+    position: relative;
+    flex-shrink: 0;
+  }
+
   .filter-input {
     width: 260px;
-    padding: 4px 8px;
+    padding: 4px 24px 4px 8px;
     font-size: 13px;
-    flex-shrink: 0;
+  }
+
+  .filter-clear {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 2px;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+
+    &:hover {
+      color: var(--color-text);
+    }
   }
 
   .btn-active {

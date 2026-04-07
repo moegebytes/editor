@@ -23,10 +23,14 @@
       const el = target;
       const selected = hasSelection(el);
 
+      const canCut = document.queryCommandSupported?.('cut') ?? false;
+      const canCopy = document.queryCommandSupported?.('copy') ?? false;
+      const canInsert = document.queryCommandSupported?.('insertText') ?? false;
+
       result.push(
         {
           label: 'Cut',
-          disabled: !selected,
+          disabled: !selected || !canCut,
           action: () => {
             el.focus();
             document.execCommand('cut');
@@ -34,7 +38,7 @@
         },
         {
           label: 'Copy',
-          disabled: !selected,
+          disabled: !selected || !canCopy,
           action: () => {
             el.focus();
             document.execCommand('copy');
@@ -42,6 +46,7 @@
         },
         {
           label: 'Paste',
+          disabled: !canInsert,
           action: () => {
             el.focus();
             navigator.clipboard.readText().then((text) => {

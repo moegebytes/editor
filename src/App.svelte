@@ -1,20 +1,26 @@
 <script lang="ts">
-  import type { AppSettings, FlatEntry, ProjectFiles, ProjectSettings } from './lib/types';
-  import { isText, isUntranslated, isTranslated } from './lib/utils';
+  import type { AppSettings, FlatEntry, ProjectFiles, ProjectSettings, RecoveryEntry } from './lib/types';
+  import { isText, isTranslated, isUntranslated, modKey } from './lib/utils';
   import { useDebouncedValue } from './lib/debounced.svelte';
+  import { type Command, UndoStack } from './lib/undo.svelte';
+  import { exportProjectDialog } from './lib/dialogs';
   import {
+    checkRecovery,
+    closeProject,
     confirmLine,
     createProject,
+    deleteRecovery,
     exportProject,
-    exportProjectDialog,
     getAppSettings,
     importProject,
+    loadRecovery,
     openProject,
+    saveProject,
+    saveTranslation,
+    unconfirmLine,
     updateAppSettings,
     updateProject,
-    saveTranslation,
-    saveProject,
-    unconfirmLine,
+    writeRecovery,
   } from './lib/ipc';
   import Toolbar from './components/Toolbar.svelte';
   import EditorTable from './components/EditorTable.svelte';
@@ -26,10 +32,11 @@
   import SettingsView from './components/SettingsView.svelte';
   import GoToLineDialog from './components/GoToLineDialog.svelte';
   import AboutDialog from './components/AboutDialog.svelte';
+  import RecoveryDialog from './components/RecoveryDialog.svelte';
   import UnsavedChangesDialog from './components/UnsavedChangesDialog.svelte';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { toast } from './lib/toast.svelte';
-  import { SvelteSet } from 'svelte/reactivity';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import ToastContainer from './components/ui/ToastContainer.svelte';
 
   // Project
@@ -38,13 +45,16 @@
   let projectFiles: ProjectFiles = $state({ jp: '', en: '' });
   let confirmedLines = new SvelteSet<number>();
   let projectSettings: ProjectSettings = $state({});
-  let appSettings: AppSettings = $state({ autoConfirmOnEnter: false, partialSearch: false });
+  let appSettings: AppSettings = $state({ autoConfirmOnEnter: false, partialSearch: false, autoSaveIntervalSecs: 0 });
+  let minAutoSaveIntervalSecs = $state(30);
   let settingsVisible = $state(false);
   let goToLineVisible = $state(false);
   let aboutVisible = $state(false);
 
   // Editor
   let entries: FlatEntry[] = $state([]);
+  let dirtyIndices = new SvelteMap<number, number>();
+  const undoStack = new UndoStack();
   let modified = $state(false);
   let loading = $state(false);
   let saving = $state(false);
@@ -69,15 +79,32 @@
   let pendingAction: (() => void) | null = null;
   let closingConfirmed = false;
 
-  let stats = $derived({
-    totalText: entries.filter(isText).length,
-    translated: entries.filter(isTranslated).length,
-    confirmed: entries.filter((e) => isText(e) && confirmedLines.has(e.index)).length,
+  // Recovery dialog
+  let recoveryDialogVisible = $state(false);
+  let recoveryTimestamp = $state(0);
+  let recoveryEntryCount = $state(0);
+  let recoveryConfirmedDelta = $state(0);
+
+  let stats = $derived.by(() => {
+    let totalText = 0,
+      translated = 0,
+      confirmed = 0;
+    for (const e of entries) {
+      if (!isText(e)) continue;
+      totalText++;
+      if (e.enText) translated++;
+      if (confirmedLines.has(e.index)) confirmed++;
+    }
+    return { totalText, translated, confirmed };
   });
 
   let hasProject = $derived(projectName !== null);
 
-  getAppSettings().then((s) => (appSettings = s));
+  getAppSettings().then((s) => {
+    const { minAutoSaveIntervalSecs: min, ...settings } = s;
+    appSettings = settings;
+    minAutoSaveIntervalSecs = min;
+  });
 
   getCurrentWindow().onCloseRequested((event) => {
     if (modified && !closingConfirmed) {
@@ -92,6 +119,25 @@
   $effect(() => {
     void debouncedFilter.value;
     if (findQuery) computeFindMatches(findQuery);
+  });
+
+  function buildRecoveryEntries(): Record<string, RecoveryEntry> {
+    const result: Record<string, RecoveryEntry> = {};
+    for (const [idx, count] of dirtyIndices) {
+      if (count <= 0) continue;
+      const e = entries[idx];
+      if (e) result[idx] = { enText: e.enText, notes: e.notes };
+    }
+    return result;
+  }
+
+  $effect(() => {
+    const interval = appSettings.autoSaveIntervalSecs;
+    if (!hasProject || interval === 0) return;
+    const timer = setInterval(() => {
+      if (modified) writeRecovery(buildRecoveryEntries()).catch(() => {});
+    }, interval * 1000);
+    return () => clearInterval(timer);
   });
 
   function guardUnsaved(action: () => void) {
@@ -125,13 +171,53 @@
     for (const i of proj.confirmedLines) confirmedLines.add(i);
     projectSettings = proj.settings;
     entries = proj.entries;
+    dirtyIndices.clear();
+    undoStack.clear();
     modified = false;
+  }
+
+  async function checkForRecovery(id: string) {
+    const info = await checkRecovery(id);
+    if (info) {
+      recoveryTimestamp = info.timestamp;
+      recoveryEntryCount = info.entryCount;
+      recoveryConfirmedDelta = info.confirmedLineCount - confirmedLines.size;
+      recoveryDialogVisible = true;
+    }
+  }
+
+  async function handleRecoveryRestore() {
+    if (!projectId) return;
+    try {
+      const data = await loadRecovery(projectId);
+      for (const [idx, rec] of Object.entries(data.entries)) {
+        const entry = entries[Number(idx)];
+        if (entry) {
+          entry.enText = rec.enText;
+          entry.notes = rec.notes;
+        }
+      }
+      confirmedLines.clear();
+      for (const i of data.confirmedLines) confirmedLines.add(i);
+      dirtyIndices.clear();
+      modified = true;
+      await deleteRecovery(projectId);
+      toast.success('Changes restored from snapshot');
+    } catch (e) {
+      toast.error(`Failed to restore from snapshot: ${e}`);
+    }
+  }
+
+  function handleRecoveryDiscard() {
+    if (projectId) deleteRecovery(projectId).catch(() => {});
   }
 
   async function handleNewProject(name: string, jp: string, en: string) {
     try {
       loading = true;
-      applyProject(await createProject(name, { jp, en }));
+      const proj = await createProject(name, { jp, en });
+      applyProject(proj);
+      await checkForRecovery(proj.id);
     } catch (e) {
       toast.error(`Failed to create project: ${e}`);
     } finally {
@@ -142,7 +228,9 @@
   async function handleImportProject(sourcePath: string, name: string, jp: string, en: string) {
     try {
       loading = true;
-      applyProject(await importProject(sourcePath, name, { jp, en }));
+      const proj = await importProject(sourcePath, name, { jp, en });
+      applyProject(proj);
+      await checkForRecovery(proj.id);
     } catch (e) {
       toast.error(`Failed to import project: ${e}`);
     } finally {
@@ -154,6 +242,7 @@
     try {
       loading = true;
       applyProject(await openProject(id));
+      await checkForRecovery(id);
     } catch (e) {
       toast.error(`Failed to open project: ${e}`);
     } finally {
@@ -181,7 +270,9 @@
       saving = true;
       await saveTranslation(entries);
       await saveProject();
+      dirtyIndices.clear();
       modified = false;
+      if (projectId) deleteRecovery(projectId).catch(() => {});
       toast.success('Project saved');
     } catch (e) {
       toast.error(`Failed to save: ${e}`);
@@ -202,10 +293,14 @@
   }
 
   function doCloseProject() {
+    if (projectId) deleteRecovery(projectId).catch(() => {});
+    closeProject();
     projectId = null;
     projectName = null;
     projectFiles = { jp: '', en: '' };
     entries = [];
+    dirtyIndices.clear();
+    undoStack.clear();
     confirmedLines.clear();
     projectSettings = {};
     modified = false;
@@ -221,18 +316,33 @@
     guardUnsaved(doCloseProject);
   }
 
+  function incrementDirty(index: number) {
+    dirtyIndices.set(index, (dirtyIndices.get(index) ?? 0) + 1);
+  }
+
+  function decrementDirty(index: number) {
+    dirtyIndices.set(index, (dirtyIndices.get(index) ?? 0) - 1);
+  }
+
   function handleEnTextChange(index: number, newText: string) {
+    const oldText = entries[index].enText;
     entries[index].enText = newText;
+    const coalesced = undoStack.coalesceText(index, oldText, newText);
+    if (!coalesced) incrementDirty(index);
     modified = true;
   }
 
   function handleNotesChange(index: number, notes: string[]) {
+    const oldNotes = [...entries[index].notes];
     entries[index].notes = notes;
+    undoStack.push({ kind: 'editNotes', index, oldNotes, newNotes: [...notes] });
+    incrementDirty(index);
     modified = true;
   }
 
-  async function handleToggleConfirm(index: number) {
-    if (confirmedLines.has(index)) {
+  async function handleToggleConfirm(index: number, grouped = false) {
+    const wasConfirmed = confirmedLines.has(index);
+    if (wasConfirmed) {
       confirmedLines.delete(index);
       try {
         await unconfirmLine(index);
@@ -250,6 +360,12 @@
         toast.error(`Failed to confirm line: ${e}`);
         return;
       }
+    }
+    const cmd: Command = wasConfirmed ? { kind: 'unconfirm', index } : { kind: 'confirm', index };
+    if (grouped) {
+      undoStack.groupWithLast(cmd);
+    } else {
+      undoStack.push(cmd);
     }
     modified = true;
   }
@@ -341,7 +457,10 @@
     const lower = entry.enText.toLowerCase();
     const pos = lower.indexOf(findQuery.toLowerCase());
     if (pos < 0) return;
+    const oldText = entry.enText;
     entries[idx].enText = entry.enText.substring(0, pos) + replacement + entry.enText.substring(pos + findQuery.length);
+    undoStack.push({ kind: 'editText', index: idx, oldText, newText: entries[idx].enText });
+    incrementDirty(idx);
     modified = true;
     computeFindMatches(findQuery);
   }
@@ -350,7 +469,7 @@
     if (!query) return;
     const lower = query.toLowerCase();
     const matchSet = new Set(findMatchIndices);
-    let count = 0;
+    const commands: Command[] = [];
     for (const entry of entries) {
       if (!matchSet.has(entry.index) || !entry.enText) continue;
       const en = entry.enText;
@@ -365,39 +484,109 @@
         }
         result += en.substring(i, pos) + replacement;
         i = pos + query.length;
-        count++;
       }
-      if (result !== en) entry.enText = result;
+      if (result !== en) {
+        commands.push({ kind: 'editText', index: entry.index, oldText: en, newText: result });
+        entry.enText = result;
+        incrementDirty(entry.index);
+      }
     }
-    if (count > 0) modified = true;
+    if (commands.length > 0) {
+      undoStack.push(commands.length === 1 ? commands[0] : commands);
+      modified = true;
+    }
     computeFindMatches(query);
   }
 
+  async function applyEntry(commands: Command[], reverse: boolean) {
+    const ipcCalls: Promise<void>[] = [];
+    for (const cmd of commands) {
+      if (cmd.kind === 'editText') {
+        entries[cmd.index].enText = reverse ? cmd.oldText : cmd.newText;
+        (reverse ? decrementDirty : incrementDirty)(cmd.index);
+      } else if (cmd.kind === 'editNotes') {
+        entries[cmd.index].notes = reverse ? [...cmd.oldNotes] : [...cmd.newNotes];
+        (reverse ? decrementDirty : incrementDirty)(cmd.index);
+      } else if (cmd.kind === 'confirm') {
+        if (reverse) {
+          confirmedLines.delete(cmd.index);
+          ipcCalls.push(unconfirmLine(cmd.index));
+        } else {
+          confirmedLines.add(cmd.index);
+          ipcCalls.push(confirmLine(cmd.index));
+        }
+      } else if (cmd.kind === 'unconfirm') {
+        if (reverse) {
+          confirmedLines.add(cmd.index);
+          ipcCalls.push(confirmLine(cmd.index));
+        } else {
+          confirmedLines.delete(cmd.index);
+          ipcCalls.push(unconfirmLine(cmd.index));
+        }
+      }
+    }
+    if (ipcCalls.length > 0) await Promise.all(ipcCalls);
+  }
+
+  async function handleUndo() {
+    const entry = undoStack.popUndo();
+    if (!entry) return;
+    try {
+      const commands = Array.isArray(entry) ? [...entry].reverse() : [entry];
+      await applyEntry(commands, true);
+      modified = true;
+    } catch (e) {
+      toast.error(`Undo failed: ${e}`);
+    }
+  }
+
+  async function handleRedo() {
+    const entry = undoStack.popRedo();
+    if (!entry) return;
+    try {
+      const commands = Array.isArray(entry) ? entry : [entry];
+      await applyEntry(commands, false);
+      modified = true;
+    } catch (e) {
+      toast.error(`Redo failed: ${e}`);
+    }
+  }
+
   function handleKeydownGlobal(e: KeyboardEvent) {
-    if (e.ctrlKey && e.key === 'f') {
-      e.preventDefault();
-      toolbarRef?.focusFilter();
-      return;
-    }
-    if (e.ctrlKey && e.key === 'h') {
-      e.preventDefault();
-      findReplaceVisible = !findReplaceVisible;
-      return;
-    }
-    if (e.ctrlKey && e.key === 'd') {
-      e.preventDefault();
-      dictVisible = !dictVisible;
-      return;
-    }
-    if (e.ctrlKey && e.key === 'g') {
-      e.preventDefault();
-      goToLineVisible = true;
-      return;
-    }
-    if ((e.ctrlKey && e.key === 'r') || e.key === 'F5') {
+    if (e.key === 'F3' || e.key === 'F5' || e.key === 'F7') {
       e.preventDefault();
       return;
     }
+
+    if (!modKey(e)) return;
+
+    switch (e.key) {
+      case 'f':
+        toolbarRef?.focusFilter();
+        break;
+      case 'h':
+        findReplaceVisible = !findReplaceVisible;
+        break;
+      case 'd':
+        dictVisible = !dictVisible;
+        break;
+      case 'g':
+        goToLineVisible = true;
+        break;
+      case 'z':
+        handleUndo();
+        break;
+      case 'y':
+        handleRedo();
+        break;
+      case 'r':
+      case 'j':
+      case 'p':
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
   }
 </script>
 
@@ -417,6 +606,7 @@
       files={projectFiles}
       bind:settings={projectSettings}
       bind:appSettings
+      {minAutoSaveIntervalSecs}
       onBack={() => (settingsVisible = false)}
       onSave={handleUpdateProject}
     />
@@ -431,6 +621,10 @@
       onJumpUntranslated={jumpToNextUntranslated}
       onJumpUnconfirmed={jumpToNextUnconfirmed}
       onConfirmToggle={confirmToggleCurrent}
+      onUndo={handleUndo}
+      onRedo={handleRedo}
+      undoDisabled={!undoStack.canUndo}
+      redoDisabled={!undoStack.canRedo}
       onGoToLine={() => (goToLineVisible = true)}
       onOpenSettings={() => (settingsVisible = true)}
       onAbout={() => (aboutVisible = true)}
@@ -450,6 +644,7 @@
           onNotesChange={handleNotesChange}
           onJumpNextUnconfirmed={jumpToNextUnconfirmed}
           {confirmedLines}
+          {dirtyIndices}
           autoConfirmOnEnter={appSettings.autoConfirmOnEnter}
           bind:selectedIndex
           onSave={handleSave}
@@ -482,9 +677,24 @@
 
 <GoToLineDialog bind:visible={goToLineVisible} maxLine={entries.length} onGo={handleGoToLine} />
 
-<AboutDialog bind:visible={aboutVisible} {projectName} stats={hasProject ? stats : null} />
+<AboutDialog
+  bind:visible={aboutVisible}
+  {projectName}
+  stats={hasProject ? stats : null}
+  {appSettings}
+  projectSettings={hasProject ? projectSettings : null}
+/>
 
 <UnsavedChangesDialog bind:visible={unsavedDialogVisible} onSave={handleUnsavedSave} onDiscard={handleUnsavedDiscard} />
+
+<RecoveryDialog
+  bind:visible={recoveryDialogVisible}
+  timestamp={recoveryTimestamp}
+  entryCount={recoveryEntryCount}
+  confirmedDelta={recoveryConfirmedDelta}
+  onRestore={handleRecoveryRestore}
+  onDiscard={handleRecoveryDiscard}
+/>
 
 <style>
   .app {

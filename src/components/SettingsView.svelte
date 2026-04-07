@@ -6,20 +6,22 @@
     projectName,
     files,
     settings = $bindable({}),
-    appSettings = $bindable({ autoConfirmOnEnter: false, partialSearch: false }),
+    appSettings = $bindable(),
+    minAutoSaveIntervalSecs,
     onBack,
     onSave,
   }: {
     projectName: string;
     files: ProjectFiles;
     settings?: ProjectSettings;
-    appSettings?: AppSettings;
+    appSettings: AppSettings;
+    minAutoSaveIntervalSecs: number;
     onBack: () => void;
     onSave: (name: string, settings: ProjectSettings, appSettings: AppSettings) => void;
   } = $props();
 
   let nameInput = $state('');
-  let draftApp: AppSettings = $state({ autoConfirmOnEnter: false, partialSearch: false });
+  let draftApp: AppSettings = $state({ ...appSettings });
   let activeTab: 'project' | 'editor' | 'dictionary' = $state('project');
 
   $effect(() => {
@@ -30,11 +32,15 @@
   let hasChanges = $derived(
     nameInput.trim() !== projectName ||
       draftApp.autoConfirmOnEnter !== appSettings.autoConfirmOnEnter ||
-      draftApp.partialSearch !== appSettings.partialSearch,
+      draftApp.partialSearch !== appSettings.partialSearch ||
+      draftApp.autoSaveIntervalSecs !== appSettings.autoSaveIntervalSecs,
   );
 
   function save() {
     const trimmedName = nameInput.trim() || projectName;
+    if (draftApp.autoSaveIntervalSecs > 0 && draftApp.autoSaveIntervalSecs < minAutoSaveIntervalSecs) {
+      draftApp.autoSaveIntervalSecs = minAutoSaveIntervalSecs;
+    }
     if (hasChanges) {
       appSettings = { ...draftApp };
       onSave(trimmedName, settings, draftApp);
@@ -95,6 +101,21 @@
               </span>
             </span>
           </label>
+          <div class="field-row">
+            <label class="field-label" for="auto-save-interval">Auto-save interval (seconds)</label>
+            <input
+              id="auto-save-interval"
+              type="number"
+              min="0"
+              max="600"
+              class="field-input field-input-narrow"
+              bind:value={draftApp.autoSaveIntervalSecs}
+            />
+          </div>
+          <p class="field-hint">
+            How often to write a recovery file when there are unsaved changes. Minimum {minAutoSaveIntervalSecs}s, set
+            to 0 to disable.
+          </p>
         {:else}
           <label class="check-row">
             <input type="checkbox" bind:checked={draftApp.partialSearch} />
@@ -240,6 +261,11 @@
     flex: 1;
     padding: 6px 10px;
     max-width: 320px;
+  }
+
+  .field-input-narrow {
+    max-width: 80px;
+    flex: 0;
   }
 
   .field-path {

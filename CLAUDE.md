@@ -38,14 +38,17 @@ editor/
 │   ├── lib/
 │   │   ├── types.ts                 -- Types for IPC
 │   │   ├── ipc.ts                   -- Tauri invoke wrappers
+│   │   ├── dialogs.ts               -- Tauri dialog helpers (file/export/import pickers)
 │   │   ├── utils.ts                 -- Shared utilities (entry predicates, set helpers, kanji detection)
 │   │   ├── debounced.svelte.ts      -- useDebouncedValue rune helper
-│   │   └── toast.svelte.ts          -- Toast notification store (Svelte 5 runes module)
+│   │   ├── toast.svelte.ts          -- Toast notification store (Svelte 5 runes module)
+│   │   └── undo.svelte.ts           -- Undo/redo stack (command pattern)
 │   └── components/
 │       ├── ui/
 │       │   ├── ContextMenu.svelte
 │       │   ├── Dialog.svelte
 │       │   ├── DropdownMenu.svelte
+│       │   ├── KanjiText.svelte
 │       │   ├── LoadingOverlay.svelte
 │       │   └── ToastContainer.svelte
 │       ├── AboutDialog.svelte
@@ -56,6 +59,7 @@ editor/
 │       ├── FindReplaceBar.svelte
 │       ├── GoToLineDialog.svelte
 │       ├── ProjectHome.svelte
+│       ├── RecoveryDialog.svelte
 │       ├── SettingsView.svelte
 │       ├── StatusBar.svelte
 │       ├── Toolbar.svelte
@@ -75,6 +79,7 @@ editor/
 │       ├── core.rs                  -- File pairing, FlatEntry type, notes, reconstruction
 │       ├── jmdict.rs                -- JMdict SQLite queries + Vibrato tokenizer
 │       ├── kanjidic.rs              -- KANJIDIC2 SQLite queries (kanji lookup)
+│       ├── recovery.rs              -- Auto-save recovery file I/O
 │       ├── util.rs                  -- Shared utilities (friendly IO error messages)
 │       └── wiktionary.rs            -- Wiktionary offline SQLite queries
 ├── tools/
@@ -97,6 +102,11 @@ editor/
 
 **Architecture:** Single Tauri crate, modules for logic. `commands.rs` stays thin (deserialize -> call -> serialize). `tools/` is
 a separate Cargo workspace.
+
+**Logging:** Per-session log files in `config_dir/logs/` (5 max, auto-pruned). File logger at `Debug` level, console at
+`Info` (release) or `Debug` (dev). Custom panic hook captures panic info + backtrace to log. All IPC commands log entry
+at `debug!` level. Frontend `window.onerror` and `unhandledrejection` are forwarded to the backend via `log_error` and
+logged with `(WebView)` prefix.
 
 ## Strings file format
 
@@ -123,19 +133,27 @@ structural rows.
 yellow (translated), green (confirmed). Double-click row number to confirm/unconfirm. Includes have collapse/expand.
 Emit/blank rows hidden. Notes indicator: `+` to add, `[N]` when present.
 
-**Toolbar menus:** Project (Save/Export/Settings/Close), Line (Next Untranslated/Unconfirmed, Confirm/Unconfirm),
-Tools (Dictionary/Go to Line/Find & Replace), Help (About). Filter input (CTRL+F) right-aligned.
+**Toolbar menus:** Project (Save/Export/Settings/Close), Line (Undo/Redo, Next Untranslated/Unconfirmed,
+Confirm/Unconfirm), Tools (Dictionary/Go to Line/Find & Replace), Help (About). Filter input (CTRL+F) right-aligned.
+
+**Undo/redo (Ctrl+Z / Ctrl+Y):** Command pattern with coalescing (consecutive text edits to same cell merge into one
+entry) and compound actions (auto-confirm on Enter groups with preceding text edit, Replace All is one entry). Stack
+bounded at 200, survives saves, resets on project close/open. Lives in frontend (`lib/undo.svelte.ts`).
 
 **Dictionary panel:** Two tabs: **JMdict** and **Wiktionary**. Shared search input with search button.
 Back/forward navigation (shared history, 100 entries max). Arrow buttons in header. JMdict tab: Vibrato tokenizes JP
 text, looks up tokens, inflection detection with base form navigation with results ordered by priority.
 Wiktionary tab: Entries grouped by etymology with senses, examples, synonyms, antonyms, coordinate terms, and other
-relations. External query changes auto-search both tabs and reset to JMdict tab. Optional partial (prefix) search skips
-exact-match-first behavior (configurable in settings).
+relations. External query changes auto-search both tabs and reset to JMdict tab. Optional partial (prefix) search
+includes prefix results alongside exact matches, with exact matches always ordered first (configurable in settings).
 
 **Settings:** Three tabs: **Project**, **Editor**, **Dictionary**.
 Project tab controls per-project settings (`ProjectSettings`). Other tabs control app-wide settings (`AppSettings`,
 persisted in `settings.json`).
+
+**Auto-save:** Periodic recovery file written to `{config_dir}/recovery/{project_id}.recovery.json` when there are
+unsaved changes (default: every 30s, configurable in Editor settings, 0 = disabled). On project open, if a recovery
+file exists, a dialog offers to restore or discard. Recovery files are cleaned up on explicit save or clean close.
 
 **Find & Replace (Ctrl+H):** Searches EN text in filtered entries. Real-time match count, navigate Enter/Shift+Enter,
 replace current or all.
@@ -157,6 +175,7 @@ replace current or all.
 create_project(name, files: {jp, en}) -> ProjectWithEntries
 open_project(id) -> ProjectWithEntries
 save_project() -> ()
+close_project() -> ()
 save_translation(entries) -> ()
 confirm_line(index) -> ()
 unconfirm_line(index) -> ()
@@ -187,10 +206,23 @@ lookup_kanji(ch) -> Option<KanjiEntry>
 lookup_wiktionary(term) -> WiktResult { term, entries: Vec<WiktWordEntry> }
 ```
 
+### Recovery
+```
+write_recovery(entries: Map<index, RecoveryEntry { enText, notes }>) -> ()
+check_recovery(id) -> Option<RecoveryInfo { timestamp }>
+load_recovery(id) -> RecoveryData { entries: Map<index, RecoveryEntry>, confirmedLines, timestamp }
+delete_recovery(id) -> ()
+```
+
 ### App settings
 ```
-get_app_settings() -> AppSettings { autoConfirmOnEnter, partialSearch }
+get_app_settings() -> AppSettings { autoConfirmOnEnter, partialSearch, autoSaveIntervalSecs }
 update_app_settings(settings) -> ()
+```
+
+### Logging
+```
+log_error(message, stack?) -> ()
 ```
 
 ### Environment

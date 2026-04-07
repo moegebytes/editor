@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { WiktResult, WiktRelation } from '../lib/types';
   import { lookupWiktionary } from '../lib/ipc';
-  import { isKanji } from '../lib/utils';
   import KanjiDetail from './KanjiDetail.svelte';
+  import KanjiText from './ui/KanjiText.svelte';
 
   let {
     onNavigate,
@@ -102,13 +102,7 @@
       <div class="wikt-entry">
         <div class="entry-headword">
           <span class="headword-text">
-            {#each entry.word.split('') as ch}
-              {#if isKanji(ch)}
-                <button class="btn-icon kanji-link" onclick={() => kanjiDetailRef?.lookup(ch)}>{ch}</button>
-              {:else}
-                {ch}
-              {/if}
-            {/each}
+            <KanjiText text={entry.word} onKanjiClick={(ch) => kanjiDetailRef?.lookup(ch)} />
           </span>
           {#if entry.reading}
             <span class="reading-text">{entry.reading}</span>
@@ -213,14 +207,6 @@
       .headword-text {
         font-size: 20px;
         margin-right: 8px;
-
-        .kanji-link {
-          color: var(--color-accent);
-
-          &:hover {
-            text-decoration: underline;
-          }
-        }
       }
 
       .reading-text {

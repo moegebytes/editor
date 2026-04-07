@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use log::trace;
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -101,6 +102,8 @@ impl WiktDb {
   }
 
   fn lookup_exact(&self, term: &str) -> Result<Vec<WiktWordEntry>, WiktError> {
+    trace!("Wiktionary exact lookup for '{}'", term);
+
     let mut stmt = self
       .db
       .prepare_cached("SELECT id, word, pos, lang_code, sort_group, reading, romaji, ipa FROM words WHERE word = ?1 ORDER BY sort_group, pos")?;
@@ -111,6 +114,8 @@ impl WiktDb {
   }
 
   fn lookup_partial(&self, term: &str) -> Result<Vec<WiktWordEntry>, WiktError> {
+    trace!("Wiktionary partial lookup for '{}'", term);
+
     let pattern = format!("{}%", term);
     let mut stmt = self.db.prepare_cached(
       "SELECT id FROM words \

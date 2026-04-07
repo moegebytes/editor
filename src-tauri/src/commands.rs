@@ -1,7 +1,8 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use log::{error, info};
+use log::{debug, error, info};
 use serde::Serialize;
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
@@ -10,6 +11,7 @@ use crate::core::FlatEntry;
 use crate::jmdict::{JmdictDb, LookupResult};
 use crate::kanjidic::{KanjiDb, KanjiEntry};
 use crate::project::{self, Project, ProjectFiles, ProjectSettings, RecentProject};
+use crate::recovery::{RecoveryData, RecoveryEntry, RecoveryInfo};
 use crate::settings::AppSettings;
 use crate::wiktionary::{WiktDb, WiktResult};
 
@@ -19,8 +21,8 @@ pub struct EnvironmentInfo {
   pub app_name: String,
   pub app_version: String,
   pub tauri_version: String,
+  pub webview_version: String,
   pub os: String,
-  pub arch: String,
   pub debug: bool,
 }
 
@@ -135,6 +137,8 @@ fn pair_files(files: &ProjectFiles) -> Result<Vec<FlatEntry>, String> {
 
 #[tauri::command]
 pub fn save_translation(entries: Vec<FlatEntry>, state: State<'_, ProjectState>) -> Result<(), String> {
+  debug!("Saving translation ({} entries)", entries.len());
+
   let path = state.with_ref(|proj, _| Ok(proj.files.en.clone()))?;
   info!("Saving translation to '{}'", path);
   let reconstructed = crate::core::reconstruct_entries(&entries);
@@ -148,6 +152,8 @@ pub fn lookup_jmdict(
   app_settings: State<'_, AppSettingsState>,
 ) -> Result<LookupResult, String> {
   let partial = app_settings.0.lock().map_err(|e| e.to_string())?.partial_search;
+  debug!("Looking up JMdict '{}' (partial={})", query, partial);
+
   state.with_db(|db| {
     db.lookup(&query, partial).map_err(|e| {
       error!("Dictionary lookup failed for '{}': {}", query, e);
@@ -158,6 +164,8 @@ pub fn lookup_jmdict(
 
 #[tauri::command]
 pub fn lookup_kanji(ch: String, state: State<'_, KanjidicState>) -> Result<Option<KanjiEntry>, String> {
+  debug!("Looking up kanji '{}'", ch);
+
   let c = ch.chars().next().ok_or("Empty character")?;
   state.with_db(|db| {
     db.lookup(c).map_err(|e| {
@@ -174,6 +182,8 @@ pub fn lookup_wiktionary(
   app_settings: State<'_, AppSettingsState>,
 ) -> Result<WiktResult, String> {
   let partial = app_settings.0.lock().map_err(|e| e.to_string())?.partial_search;
+  debug!("Looking up Wiktionary '{}' (partial={})", term, partial);
+
   state.with_db(|db| {
     db.lookup(&term, partial).map_err(|e| {
       error!("Wiktionary lookup failed for '{}': {}", term, e);
@@ -225,7 +235,17 @@ pub fn save_project(state: State<'_, ProjectState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn close_project(state: State<'_, ProjectState>) -> Result<(), String> {
+  let mut lock = state.0.lock().map_err(|e| e.to_string())?;
+  if let Some(open) = lock.take() {
+    info!("Closing project {}", open.id);
+  }
+  Ok(())
+}
+
+#[tauri::command]
 pub fn confirm_line(index: usize, state: State<'_, ProjectState>) -> Result<(), String> {
+  debug!("Confirming line {}", index);
   state.with_mut(|proj, _| {
     proj.confirmed_lines.insert(index);
     Ok(())
@@ -234,6 +254,7 @@ pub fn confirm_line(index: usize, state: State<'_, ProjectState>) -> Result<(), 
 
 #[tauri::command]
 pub fn unconfirm_line(index: usize, state: State<'_, ProjectState>) -> Result<(), String> {
+  debug!("Unconfirming line {}", index);
   state.with_mut(|proj, _| {
     proj.confirmed_lines.remove(&index);
     Ok(())
@@ -242,16 +263,19 @@ pub fn unconfirm_line(index: usize, state: State<'_, ProjectState>) -> Result<()
 
 #[tauri::command]
 pub fn list_recent_projects(data_dir: State<'_, DataDir>) -> Result<Vec<RecentProject>, String> {
+  debug!("Listing recent projects");
   Ok(project::list_recent(&data_dir.0))
 }
 
 #[tauri::command]
 pub fn list_all_projects(data_dir: State<'_, DataDir>) -> Result<Vec<RecentProject>, String> {
+  debug!("Listing all projects");
   Ok(project::list_all(&data_dir.0))
 }
 
 #[tauri::command]
 pub fn remove_recent_project(id: String, data_dir: State<'_, DataDir>) -> Result<(), String> {
+  debug!("Removing recent project {}", id);
   project::remove_from_recent(&data_dir.0, &id);
   Ok(())
 }
@@ -264,6 +288,8 @@ pub fn delete_project(id: String, data_dir: State<'_, DataDir>) -> Result<(), St
 
 #[tauri::command]
 pub fn export_project(dest_path: String, state: State<'_, ProjectState>) -> Result<(), String> {
+  debug!("Exporting project to '{}'", dest_path);
+
   state.with_ref(|proj, _| {
     let mut exported = proj.clone();
     exported.files = ProjectFiles {
@@ -278,6 +304,8 @@ pub fn export_project(dest_path: String, state: State<'_, ProjectState>) -> Resu
 
 #[tauri::command]
 pub fn get_project_info(id: String, data_dir: State<'_, DataDir>) -> Result<ProjectInfo, String> {
+  debug!("Getting project info for {}", id);
+
   let proj = project::read_project(&data_dir.0, &id).map_err(crate::util::log_err)?;
   Ok(ProjectInfo {
     name: proj.name,
@@ -317,6 +345,8 @@ fn read_import_file(source_path: &str) -> Result<Project, String> {
 
 #[tauri::command]
 pub fn preview_import(source_path: String) -> Result<ImportPreview, String> {
+  debug!("Previewing import from '{}'", source_path);
+
   let proj = read_import_file(&source_path)?;
   Ok(ImportPreview {
     name: proj.name,
@@ -332,6 +362,8 @@ pub fn import_project(
   data_dir: State<'_, DataDir>,
   state: State<'_, ProjectState>,
 ) -> Result<ProjectWithEntries, String> {
+  debug!("Importing project '{}' from '{}'", name, source_path);
+
   let imported = read_import_file(&source_path)?;
   let entries = pair_files(&files)?;
   let (id, mut proj, path) = project::create_project(&data_dir.0, &name, files).map_err(crate::util::log_err)?;
@@ -349,16 +381,29 @@ pub fn import_project(
 
 #[tauri::command]
 pub fn open_app_dir(app: AppHandle, data_dir: State<'_, DataDir>) -> Result<(), String> {
+  debug!("Opening app directory");
   app
     .opener()
     .open_path(&*data_dir.0.to_string_lossy(), None::<&str>)
     .map_err(|e| e.to_string())
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettingsResponse {
+  #[serde(flatten)]
+  pub settings: AppSettings,
+  pub min_auto_save_interval_secs: u32,
+}
+
 #[tauri::command]
-pub fn get_app_settings(state: State<'_, AppSettingsState>) -> Result<AppSettings, String> {
+pub fn get_app_settings(state: State<'_, AppSettingsState>) -> Result<AppSettingsResponse, String> {
+  debug!("Getting app settings");
   let lock = state.0.lock().map_err(|e| e.to_string())?;
-  Ok(lock.clone())
+  Ok(AppSettingsResponse {
+    settings: lock.clone(),
+    min_auto_save_interval_secs: crate::settings::MIN_AUTO_SAVE_INTERVAL,
+  })
 }
 
 #[tauri::command]
@@ -367,6 +412,8 @@ pub fn update_app_settings(
   data_dir: State<'_, DataDir>,
   state: State<'_, AppSettingsState>,
 ) -> Result<(), String> {
+  debug!("Updating app settings");
+
   crate::settings::save(&data_dir.0, &settings)?;
   let mut lock = state.0.lock().map_err(|e| e.to_string())?;
   *lock = settings;
@@ -374,14 +421,54 @@ pub fn update_app_settings(
 }
 
 #[tauri::command]
+pub fn log_error(message: String, stack: Option<String>) {
+  match stack {
+    Some(ref s) => error!("(WebView) {}\n {}", message, s),
+    None => error!("(WebView) {}", message),
+  }
+}
+
+#[tauri::command]
+pub fn write_recovery(
+  entries: BTreeMap<usize, RecoveryEntry>,
+  data_dir: State<'_, DataDir>,
+  state: State<'_, ProjectState>,
+) -> Result<(), String> {
+  let lock = state.0.lock().map_err(|e| e.to_string())?;
+  let open = lock.as_ref().ok_or("No project open")?;
+  crate::recovery::write(&data_dir.0, &open.id, &entries, &open.project.confirmed_lines).map_err(crate::util::log_err)
+}
+
+#[tauri::command]
+pub fn check_recovery(id: String, data_dir: State<'_, DataDir>) -> Result<Option<RecoveryInfo>, String> {
+  debug!("Checking recovery for project {}", id);
+  Ok(crate::recovery::check(&data_dir.0, &id))
+}
+
+#[tauri::command]
+pub fn load_recovery(id: String, data_dir: State<'_, DataDir>) -> Result<RecoveryData, String> {
+  info!("Loading recovery data for project {}", id);
+  crate::recovery::load(&data_dir.0, &id).map_err(crate::util::log_err)
+}
+
+#[tauri::command]
+pub fn delete_recovery(id: String, data_dir: State<'_, DataDir>) -> Result<(), String> {
+  debug!("Deleting recovery for project {}", id);
+  crate::recovery::delete(&data_dir.0, &id);
+  Ok(())
+}
+
+#[tauri::command]
 pub fn get_environment_info(app: AppHandle) -> EnvironmentInfo {
+  debug!("Getting environment info");
+
   let pkg = app.package_info();
   EnvironmentInfo {
     app_name: pkg.name.to_string(),
     app_version: pkg.version.to_string(),
     tauri_version: tauri::VERSION.to_string(),
-    os: std::env::consts::OS.to_string(),
-    arch: std::env::consts::ARCH.to_string(),
+    webview_version: tauri::webview_version().unwrap_or_default(),
+    os: os_info::get().to_string(),
     debug: cfg!(debug_assertions),
   }
 }

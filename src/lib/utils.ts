@@ -1,3 +1,4 @@
+import { platform } from '@tauri-apps/plugin-os';
 import type { FlatEntry } from './types';
 
 export function isText(entry: FlatEntry): boolean {
@@ -14,6 +15,25 @@ export function isTranslated(entry: FlatEntry): boolean {
 
 export function getFileName(path: string): string {
   return path.replace(/^.*[/\\]/, '');
+}
+
+export function modKey(e: KeyboardEvent): boolean {
+  return platform() === 'macos' ? e.metaKey : e.ctrlKey;
+}
+
+export function isWordBoundary(prev: string | null, next: string | null): boolean {
+  if (!prev || !next) return true;
+  const diff = next.length - prev.length;
+  if (diff > 0) {
+    for (let i = 0; i < next.length; i++) {
+      if (i >= prev.length || next[i] !== prev[i]) return /\W/.test(next[i]);
+    }
+  } else if (diff < 0) {
+    for (let i = 0; i < prev.length; i++) {
+      if (i >= next.length || prev[i] !== next[i]) return /\W/.test(prev[i]);
+    }
+  }
+  return true;
 }
 
 export function isKanji(ch: string): boolean {

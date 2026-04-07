@@ -3,7 +3,7 @@
   import { createVirtualizer } from '@tanstack/svelte-virtual';
   import { StickyNoteIcon, PlusIcon, ChevronRightIcon, ChevronDownIcon, ArrowRightIcon } from '@lucide/svelte';
   import type { FlatEntry } from '../lib/types';
-  import { isText, isUntranslated, getFileName } from '../lib/utils';
+  import { isText, isUntranslated, getFileName, modKey } from '../lib/utils';
   import { SvelteSet } from 'svelte/reactivity';
   import UnsavedChangesDialog from './UnsavedChangesDialog.svelte';
 
@@ -17,6 +17,7 @@
     onNotesChange,
     onJumpNextUnconfirmed,
     confirmedLines = new Set(),
+    dirtyIndices = new Map(),
     autoConfirmOnEnter = false,
     filterText = '',
     findQuery = '',
@@ -28,10 +29,11 @@
     selectedIndex?: number;
     onSave?: () => void;
     onJpSelect?: (text: string) => void;
-    onToggleConfirm?: (index: number) => void;
+    onToggleConfirm?: (index: number, grouped?: boolean) => void;
     onNotesChange?: (index: number, notes: string[]) => void;
     onJumpNextUnconfirmed?: () => void;
     confirmedLines?: Set<number>;
+    dirtyIndices?: Map<number, number>;
     autoConfirmOnEnter?: boolean;
     filterText?: string;
     findQuery?: string;
@@ -39,7 +41,7 @@
     currentFindMatch?: number;
   } = $props();
 
-  const ROW_HEIGHT = 32;
+  const ROW_HEIGHT = 34;
 
   let scrollElement: HTMLDivElement | undefined = $state();
   let collapsedIncludes = new SvelteSet<number>();
@@ -113,8 +115,14 @@
     }
   });
 
-  function measureRow(node: HTMLElement) {
-    $virtualizer.measureElement(node);
+  type MeasureParams = { virt: { measureElement: (el: HTMLElement) => void }; measure: boolean };
+  function measureRow(node: HTMLElement, params: MeasureParams) {
+    if (params.measure) params.virt.measureElement(node);
+    return {
+      update(params: MeasureParams) {
+        if (params.measure) params.virt.measureElement(node);
+      },
+    };
   }
 
   function childCount(includeIndex: number): number {
@@ -287,18 +295,20 @@
     });
   }
 
-  function handleKeydown(event: KeyboardEvent) {
+  function handleKeydown(e: KeyboardEvent) {
     const currentVisible = visibleIndexOf(selectedIndex);
     const isEnFocused =
       document.activeElement instanceof HTMLInputElement && scrollElement?.contains(document.activeElement);
 
-    if (event.ctrlKey && event.key === 's') {
-      event.preventDefault();
+    const mod = modKey(e);
+
+    if (mod && e.key === 's') {
+      e.preventDefault();
       onSave?.();
       return;
     }
 
-    if (event.key === 'Escape' && !event.defaultPrevented) {
+    if (e.key === 'Escape' && !e.defaultPrevented) {
       if (expandedNotes !== null) {
         if (hasUnsavedNotes()) {
           pendingNotesTarget = null;
@@ -312,50 +322,50 @@
       return;
     }
 
-    if (event.ctrlKey && event.key === 'Enter') {
-      event.preventDefault();
+    if (mod && e.key === 'Enter') {
+      e.preventDefault();
       if (selectedIndex >= 0) onToggleConfirm?.(selectedIndex);
       const target = findEditableRow(currentVisible, 1);
       if (target >= 0) scrollToVisibleRow(target);
       return;
     }
 
-    if (event.ctrlKey && event.altKey && event.key === 'ArrowDown') {
-      event.preventDefault();
+    if (mod && e.altKey && e.key === 'ArrowDown') {
+      e.preventDefault();
       onJumpNextUnconfirmed?.();
       return;
     }
 
-    if (event.key === 'Enter' && isEnFocused) {
-      event.preventDefault();
+    if (e.key === 'Enter' && isEnFocused) {
+      e.preventDefault();
       if (autoConfirmOnEnter && selectedIndex >= 0 && !confirmedLines.has(selectedIndex)) {
-        onToggleConfirm?.(selectedIndex);
+        onToggleConfirm?.(selectedIndex, true);
       }
       const target = findEditableRow(currentVisible, 1);
       if (target >= 0) scrollToVisibleRow(target);
       return;
     }
 
-    if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && isEnFocused) {
-      event.preventDefault();
-      const dir = event.key === 'ArrowDown' ? 1 : -1;
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && isEnFocused) {
+      e.preventDefault();
+      const dir = e.key === 'ArrowDown' ? 1 : -1;
       const target = findEditableRow(currentVisible, dir as 1 | -1);
       if (target >= 0) scrollToVisibleRow(target);
       return;
     }
 
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      const dir = event.shiftKey ? -1 : 1;
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const dir = e.shiftKey ? -1 : 1;
       const start = currentVisible >= 0 ? currentVisible : dir === 1 ? -1 : visibleEntries.length;
       const target = findEditableRow(start, dir as 1 | -1);
       if (target >= 0) scrollToVisibleRow(target);
       return;
     }
 
-    if (event.ctrlKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-      event.preventDefault();
-      const dir = event.key === 'ArrowDown' ? 1 : -1;
+    if (mod && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      const dir = e.key === 'ArrowDown' ? 1 : -1;
       const start = currentVisible >= 0 ? currentVisible : dir === 1 ? -1 : visibleEntries.length;
       const target = findUntranslatedRow(start, dir as 1 | -1);
       if (target >= 0) scrollToVisibleRow(target);
@@ -392,12 +402,16 @@
           style:right="0"
           data-entry-index={entry.index}
           data-index={row.index}
-          use:measureRow
+          use:measureRow={{
+            virt: $virtualizer,
+            measure: expandedNotes === entry.index || (isText(entry) && entry.index === selectedIndex),
+          }}
           onclick={() => handleRowClick(entry.index)}
         >
           <div
             class="cell col-num"
             class:col-num-confirmed={confirmedLines.has(entry.index)}
+            class:col-num-dirty={(dirtyIndices.get(entry.index) ?? 0) > 0}
             ondblclick={() => {
               if (isText(entry) && onToggleConfirm) {
                 onToggleConfirm(entry.index);
@@ -566,7 +580,7 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    border-bottom: 1px solid var(--color-border);
+    box-shadow: inset 0 -1px 0 var(--color-border);
     cursor: default;
   }
 
@@ -580,6 +594,8 @@
 
   .col-num {
     width: 50px;
+    padding-left: 4px;
+    padding-right: 4px;
     text-align: right;
     color: var(--color-text-muted);
     font-variant-numeric: tabular-nums;
@@ -606,17 +622,17 @@
 
     input {
       width: 100%;
-      border: none;
+      border: 1px solid transparent;
       background: transparent;
       padding: 2px 4px;
+      border-radius: 3px;
       color: var(--color-text);
       font-family: inherit;
       font-size: inherit;
 
       &:focus {
         background: var(--color-surface-alt);
-        border: 1px solid var(--color-accent);
-        border-radius: 3px;
+        border-color: var(--color-accent);
         outline: none;
       }
     }
@@ -691,8 +707,8 @@
 
   .notes-btn {
     width: 24px;
-    height: 24px;
     margin: 0;
+    align-self: stretch;
     color: var(--color-notes);
     flex-shrink: 0;
     display: flex;
@@ -738,6 +754,10 @@
   .col-num-confirmed {
     color: var(--color-confirmed-text);
     font-weight: 600;
+  }
+
+  .col-num-dirty {
+    border-left: 3px solid var(--color-accent);
   }
 
   /*noinspection CssUnusedSymbol*/

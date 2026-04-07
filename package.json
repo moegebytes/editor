@@ -29,7 +29,8 @@
     "@lucide/svelte": "1.7.0",
     "@tanstack/svelte-virtual": "3.13.23",
     "@tauri-apps/api": "2.10.1",
-    "@tauri-apps/plugin-dialog": "2.6.0"
+    "@tauri-apps/plugin-dialog": "2.7.0",
+    "@tauri-apps/plugin-os": "2.3.2"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -37,9 +38,9 @@
     "@tauri-apps/cli": "2.10.1",
     "@typescript-eslint/eslint-plugin": "8.58.0",
     "@typescript-eslint/parser": "8.58.0",
-    "eslint": "10.1.0",
+    "eslint": "10.2.0",
     "eslint-config-prettier": "10.1.8",
-    "eslint-plugin-svelte": "3.16.0",
+    "eslint-plugin-svelte": "3.17.0",
     "globals": "17.4.0",
     "npm-run-all2": "8.0.4",
     "prettier": "3.8.1",
@@ -49,6 +50,6 @@
     "svelte-check": "4.4.6",
     "tslib": "2.8.1",
     "typescript": "6.0.2",
-    "vite": "8.0.3"
+    "vite": "8.0.5"
   }
 }

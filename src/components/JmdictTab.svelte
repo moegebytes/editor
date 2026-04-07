@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { DictEntry, Inflection } from '../lib/types';
   import { lookupJmdict } from '../lib/ipc';
-  import { isKanji } from '../lib/utils';
   import KanjiDetail from './KanjiDetail.svelte';
+  import KanjiText from './ui/KanjiText.svelte';
 
   let {
     onNavigate,
@@ -119,13 +119,7 @@
       <div class="entry-headword">
         {#if entry.kanji.length > 0}
           <span class="kanji-text">
-            {#each entry.kanji[0].text.split('') as ch}
-              {#if isKanji(ch)}
-                <button class="btn-icon kanji-link" onclick={() => kanjiDetailRef?.lookup(ch)}>{ch}</button>
-              {:else}
-                {ch}
-              {/if}
-            {/each}
+            <KanjiText text={entry.kanji[0].text} onKanjiClick={(ch) => kanjiDetailRef?.lookup(ch)} />
           </span>
         {/if}
         <span class="reading-text">
@@ -259,14 +253,6 @@
       .kanji-text {
         font-size: 20px;
         margin-right: 8px;
-
-        .kanji-link {
-          color: var(--color-accent);
-
-          &:hover {
-            text-decoration: underline;
-          }
-        }
       }
 
       .reading-text {

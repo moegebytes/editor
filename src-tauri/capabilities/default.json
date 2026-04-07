@@ -7,7 +7,9 @@
     "core:default",
     "core:window:allow-close",
     "core:window:allow-destroy",
-    "dialog:default",
-    "opener:allow-open-path"
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "opener:allow-open-path",
+    "os:allow-platform"
   ]
 }

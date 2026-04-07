@@ -2,13 +2,12 @@
   import type { RecentProject } from '../lib/types';
   import { getVersion } from '@tauri-apps/api/app';
   import { XIcon, Trash2Icon, TriangleAlertIcon, SettingsIcon, FolderOpenIcon } from '@lucide/svelte';
+  import { openFileDialog, importProjectDialog } from '../lib/dialogs';
   import {
     listRecentProjects,
     listAllProjects,
     removeRecentProject,
     deleteProject,
-    openFileDialog,
-    importProjectDialog,
     previewImport,
     getProjectInfo,
     updateProject,

@@ -52,6 +52,28 @@ export interface ProjectSettings {}
 export interface AppSettings {
   autoConfirmOnEnter: boolean;
   partialSearch: boolean;
+  autoSaveIntervalSecs: number;
+}
+
+export interface AppSettingsResponse extends AppSettings {
+  minAutoSaveIntervalSecs: number;
+}
+
+export interface RecoveryEntry {
+  enText: string | null;
+  notes: string[];
+}
+
+export interface RecoveryInfo {
+  timestamp: number;
+  entryCount: number;
+  confirmedLineCount: number;
+}
+
+export interface RecoveryData {
+  entries: Record<string, RecoveryEntry>;
+  confirmedLines: number[];
+  timestamp: number;
 }
 
 export interface ProjectFiles {
@@ -135,7 +157,7 @@ export interface EnvironmentInfo {
   appName: string;
   appVersion: string;
   tauriVersion: string;
+  webviewVersion: string;
   os: string;
-  arch: string;
   debug: boolean;
 }

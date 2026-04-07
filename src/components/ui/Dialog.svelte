@@ -87,6 +87,7 @@
     min-width: 320px;
     max-width: 520px;
     box-shadow: var(--shadow-dialog);
+    user-select: none;
   }
 
   .dialog-header {

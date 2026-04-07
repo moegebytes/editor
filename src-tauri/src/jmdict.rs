@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use log::trace;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -178,18 +179,18 @@ impl JmdictDb {
     // Detect inflections (always runs vibrato on the query)
     let inflections = self.detect_inflections(trimmed);
 
-    if !partial {
-      // First try exact match on the full query + kana variants
-      let mut exact = self.lookup_exact(trimmed)?;
-      for v in &variants {
-        merge_entries(&mut exact, self.lookup_exact(v)?);
-      }
-      if !exact.is_empty() {
-        return Ok(LookupResult {
-          entries: exact,
-          inflections,
-        });
-      }
+    // Always collect exact matches
+    let mut exact = self.lookup_exact(trimmed)?;
+    for v in &variants {
+      merge_entries(&mut exact, self.lookup_exact(v)?);
+    }
+
+    if !partial && !exact.is_empty() {
+      // Non-partial: return only exact matches
+      return Ok(LookupResult {
+        entries: exact,
+        inflections,
+      });
     }
 
     // Try prefix match on kanji/readings + kana variants
@@ -201,6 +202,13 @@ impl JmdictDb {
     // Fall back to FTS gloss search (for English queries)
     if entries.is_empty() {
       entries = self.lookup_fts(trimmed)?;
+    }
+
+    // Prepend exact matches before prefix/FTS results
+    if !exact.is_empty() {
+      entries.retain(|e| !exact.iter().any(|ex| ex.ent_seq == e.ent_seq));
+      exact.extend(entries);
+      entries = exact;
     }
 
     Ok(LookupResult { entries, inflections })
@@ -280,7 +288,8 @@ impl JmdictDb {
   }
 
   fn lookup_exact(&self, query: &str) -> Result<Vec<JmdictEntry>, JmdictError> {
-    // Order by priority, then prefer entries where query matches the primary kanji/reading
+    trace!("JMdict exact lookup for '{}'", query);
+
     let mut stmt = self.jmdict.prepare_cached(
       "SELECT e.ent_seq FROM entries e \
        WHERE e.ent_seq IN (SELECT ent_seq FROM kanji WHERE keb = ?1 UNION SELECT ent_seq FROM readings WHERE reb = ?1) \
@@ -297,6 +306,8 @@ impl JmdictDb {
   }
 
   fn lookup_prefix(&self, query: &str) -> Result<Vec<JmdictEntry>, JmdictError> {
+    trace!("JMdict prefix lookup for '{}'", query);
+
     let pattern = format!("{}%", query);
     let mut stmt = self.jmdict.prepare_cached(
       "SELECT e.ent_seq FROM entries e \
@@ -311,6 +322,8 @@ impl JmdictDb {
   }
 
   fn lookup_fts(&self, query: &str) -> Result<Vec<JmdictEntry>, JmdictError> {
+    trace!("JMdict FTS gloss lookup for '{}'", query);
+
     let fts_query = format!("\"{}\"", query.replace('"', "\"\""));
     let mut stmt = self.jmdict.prepare_cached(
       "SELECT e.ent_seq FROM entries e WHERE e.ent_seq IN (SELECT DISTINCT ent_seq FROM glosses_fts WHERE glosses_fts MATCH ?1) \

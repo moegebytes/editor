@@ -65,12 +65,18 @@ fn recent_path(app_data: &Path) -> PathBuf {
   app_data.join("recent.json")
 }
 
-pub fn project_path(app_data: &Path, id: &str) -> PathBuf {
-  projects_dir(app_data).join(format!("{}.json", id))
+pub fn validate_project_id(id: &str) -> Result<(), String> {
+  Uuid::try_parse(id).map_err(|_| format!("Invalid project ID '{}'", id))?;
+  Ok(())
+}
+
+pub fn project_path(app_data: &Path, id: &str) -> Result<PathBuf, String> {
+  validate_project_id(id)?;
+  Ok(projects_dir(app_data).join(format!("{}.json", id)))
 }
 
 pub fn read_project(app_data: &Path, id: &str) -> Result<Project, String> {
-  let path = project_path(app_data, id);
+  let path = project_path(app_data, id)?;
   let content = std::fs::read_to_string(&path).map_err(|e| friendly_io_msg("", &path, &e))?;
   serde_json::from_str(&content).map_err(|e| format!("Invalid project file: {}", e))
 }
@@ -82,7 +88,7 @@ pub fn update_project(
   files: ProjectFiles,
   settings: ProjectSettings,
 ) -> Result<(), String> {
-  let path = project_path(app_data, id);
+  let path = project_path(app_data, id)?;
   let content = std::fs::read_to_string(&path).map_err(|e| friendly_io_msg("", &path, &e))?;
   let mut project: Project = serde_json::from_str(&content).map_err(|e| format!("Invalid project file: {}", e))?;
   project.name = name.to_string();
@@ -93,7 +99,7 @@ pub fn update_project(
 
 pub fn create_project(app_data: &Path, name: &str, files: ProjectFiles) -> Result<(String, Project, PathBuf), String> {
   let id = Uuid::new_v4().to_string();
-  let path = project_path(app_data, &id);
+  let path = project_path(app_data, &id).unwrap();
 
   let project = Project {
     version: 1,
@@ -114,7 +120,7 @@ pub fn create_project(app_data: &Path, name: &str, files: ProjectFiles) -> Resul
 }
 
 pub fn open_project(app_data: &Path, id: &str) -> Result<(Project, PathBuf), String> {
-  let path = project_path(app_data, id);
+  let path = project_path(app_data, id)?;
   let content = std::fs::read_to_string(&path).map_err(|e| friendly_io_msg("", &path, &e))?;
   let project: Project = serde_json::from_str(&content).map_err(|e| format!("Invalid project file: {}", e))?;
 
@@ -156,7 +162,14 @@ pub fn list_recent(app_data: &Path) -> Vec<RecentProject> {
   let mut pruned = false;
 
   recent.ids.retain(|id| {
-    let path = project_path(app_data, id);
+    let path = match project_path(app_data, id) {
+      Ok(p) => p,
+      Err(_) => {
+        warn!("Pruning recent project {}: invalid uuid", id);
+        pruned = true;
+        return false;
+      }
+    };
     match std::fs::read_to_string(&path) {
       Ok(content) => match serde_json::from_str::<Project>(&content) {
         Ok(proj) => {
@@ -233,9 +246,10 @@ pub fn remove_from_recent(app_data: &Path, id: &str) {
 
 pub fn delete_project(app_data: &Path, id: &str) -> Result<(), String> {
   remove_from_recent(app_data, id);
-  let path = project_path(app_data, id);
-  if path.exists() {
-    std::fs::remove_file(&path).map_err(|e| friendly_io_msg("", &path, &e))?;
+  let path = project_path(app_data, id)?;
+  match std::fs::remove_file(&path) {
+    Ok(()) => Ok(()),
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+    Err(e) => Err(friendly_io_msg("", &path, &e)),
   }
-  Ok(())
 }

@@ -6,6 +6,7 @@ mod jmdict;
 mod kanjidic;
 mod logging;
 mod project;
+mod recovery;
 mod settings;
 mod strings;
 mod util;
@@ -31,6 +32,7 @@ fn main() {
     }))
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_os::init())
     .plugin(tauri_plugin_window_state::Builder::new().build())
     .manage(commands::JmdictState(Mutex::new(None)))
     .manage(commands::KanjidicState(Mutex::new(None)))
@@ -44,6 +46,7 @@ fn main() {
       commands::create_project,
       commands::open_project,
       commands::save_project,
+      commands::close_project,
       commands::confirm_line,
       commands::unconfirm_line,
       commands::list_recent_projects,
@@ -59,7 +62,12 @@ fn main() {
       commands::lookup_wiktionary,
       commands::get_app_settings,
       commands::update_app_settings,
+      commands::log_error,
       commands::get_environment_info,
+      commands::write_recovery,
+      commands::check_recovery,
+      commands::load_recovery,
+      commands::delete_recovery,
     ])
     .setup(|app| {
       let config_dir = app.path().app_config_dir()?;
@@ -70,6 +78,10 @@ fn main() {
       std::fs::create_dir_all(&projects_dir).map_err(|e| {
         error!("Failed to create data directory '{}': {}", projects_dir.display(), e);
         e
+      })?;
+      recovery::ensure_dir(&config_dir).map_err(|e| {
+        error!("{}", e);
+        std::io::Error::other(e)
       })?;
       app.manage(commands::DataDir(config_dir.clone()));
 
@@ -131,6 +143,11 @@ fn main() {
 
       Ok(())
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    .run(|_app, event| {
+      if let tauri::RunEvent::Exit = event {
+        info!("Exiting");
+      }
+    });
 }
