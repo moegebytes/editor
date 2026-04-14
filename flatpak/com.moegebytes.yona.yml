@@ -1,0 +1,57 @@
+app-id: com.moegebytes.yona
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: yona
+
+build-options:
+  strip: false
+  no-debuginfo: true
+
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # Projects store absolute host paths to script files, so sandbox access must survive restarts. Portal handles from
+  # `tauri-plugin-dialog` are short-lived and do not include directory access (required to resolve `#include` directives),
+  # so broad --filesystem=home is used instead. Extensive tests were performed with various implementations, however they
+  # all failed UX check or proved too complex to implement. Following alternatives are worthy of note here:
+  #  - Using `home:ro` and relying on user grating transient write access to directory on save:
+  #     This does not work because `FileChooser.OpenFile` always defaults to R/W, unless undocumented(?) option `writable`
+  #     is passed and we get FUSE document path despite R/O access. To solve this, we'd need to rely on talking to D-Bus
+  #     ourselves (either `zbus` or `libc::dlopen`) to create picker dialogs on Linux with appropriate option set.
+  #  - Having user explicitly grant access to directory after selecting file:
+  #     `tauri-plugin-dialog` uses `rfd` which does not expose ability to choose persistence, hence all documents are
+  #     ephemeral until app exists. We'd need to either talk to D-Bus ourselves or command `ashpd` to do it for us, however
+  #     `rfd` dropped usage of `ashpd` since v0.17.0 and instead just relies on `libc::dlopen`. Functionally this makes it
+  #     no different from first approach in terms of code complexity.
+  #  - Having user select directory and frontend presenting list of files to select as primary:
+  #     This is how one would implement this on macOS App Sandbox. The alternative would be to constrain format to always
+  #     requireprimary `translation.txt` in given directory. This was ultimately rejected because it suffers from same
+  #     ephemeral documents issue as file + directory flow (lack of support for persistent documents from `rfd`).
+  # I really wanted to use sandbox here, or at the very least ensure there's only R/O access, but Portal is not only
+  # poorly designed overall, the ecosystem support for it is simply lacking overall. This is a simple application, it
+  # shouldn't need to talk to D-Bus just so user can open file.
+  - --filesystem=home
+
+modules:
+  - name: yona
+    buildsystem: simple
+    sources:
+      - type: file
+        path: "@DEB_PATH@"
+      - type: file
+        path: com.moegebytes.yona.metainfo.xml
+    build-commands:
+      - ar -x *.deb && tar -xf data.tar.*
+      - install -Dm755 usr/bin/yona /app/bin/yona
+      - mkdir -p /app/lib/Yona && cp -r usr/lib/Yona/. /app/lib/Yona/
+      - install -Dm644 usr/share/applications/Yona.desktop /app/share/applications/com.moegebytes.yona.desktop
+      - sed -i 's|^Icon=.*|Icon=com.moegebytes.yona|' /app/share/applications/com.moegebytes.yona.desktop
+      - |
+        for f in usr/share/icons/hicolor/*/apps/yona.png; do
+          size=$(basename "$(dirname "$(dirname "$f")")")
+          install -Dm644 "$f" "/app/share/icons/hicolor/${size}/apps/com.moegebytes.yona.png"
+        done
+      - install -Dm644 com.moegebytes.yona.metainfo.xml /app/share/metainfo/com.moegebytes.yona.metainfo.xml

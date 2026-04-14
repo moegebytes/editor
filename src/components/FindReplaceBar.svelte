@@ -1,9 +1,11 @@
 <script lang="ts">
-  import { ChevronUpIcon, ChevronDownIcon, XIcon } from '@lucide/svelte';
-  import { useDebouncedValue } from '../lib/debounced.svelte';
+  import { ALargeSmallIcon, ChevronUpIcon, ChevronDownIcon, XIcon } from '@lucide/svelte';
+
+  import { useDebouncedValue } from '../lib/debounce.svelte.js';
 
   let {
     visible = $bindable(false),
+    caseSensitive = $bindable(false),
     onFind,
     onFindNext,
     onFindPrev,
@@ -13,6 +15,7 @@
     currentMatch = -1,
   }: {
     visible?: boolean;
+    caseSensitive?: boolean;
     onFind: (query: string) => void;
     onFindNext: () => void;
     onFindPrev: () => void;
@@ -69,14 +72,24 @@
 
 {#if visible}
   <div class="find-replace-bar">
-    <input
-      type="text"
-      placeholder="Find..."
-      bind:value={findText}
-      bind:this={findInput}
-      onkeydown={handleFindKeydown}
-      class="find-input"
-    />
+    <div class="find-input-wrapper">
+      <input
+        type="text"
+        placeholder="Find..."
+        bind:value={findText}
+        bind:this={findInput}
+        onkeydown={handleFindKeydown}
+        class="find-input"
+      />
+      <button
+        class="btn-icon case-toggle"
+        class:case-toggle-active={caseSensitive}
+        onclick={() => (caseSensitive = !caseSensitive)}
+        title="Match case"
+      >
+        <ALargeSmallIcon size={14} />
+      </button>
+    </div>
     <input
       type="text"
       placeholder="Replace with..."
@@ -119,6 +132,39 @@
     flex: 1;
     min-width: 120px;
     padding: 4px 8px;
+  }
+
+  .find-input-wrapper {
+    flex: 1;
+    min-width: 120px;
+    position: relative;
+    display: flex;
+    align-items: center;
+
+    .find-input {
+      flex: 1;
+      padding-right: 28px;
+    }
+  }
+
+  .case-toggle {
+    position: absolute;
+    right: 4px;
+    padding: 2px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    color: var(--color-text-muted);
+
+    &:hover {
+      color: var(--color-text);
+    }
+
+    &.case-toggle-active {
+      color: var(--color-accent);
+      background: var(--color-surface-alt);
+    }
   }
 
   .match-info {

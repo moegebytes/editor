@@ -1,6 +1,9 @@
 import { mount } from 'svelte';
-import App from './App.svelte';
+
 import { logError } from './lib/ipc';
+
+import App from './App.svelte';
+
 import './app.css';
 
 window.addEventListener('error', (event) => {

@@ -62,6 +62,7 @@ fn main() {
       commands::lookup_wiktionary,
       commands::get_app_settings,
       commands::update_app_settings,
+      commands::update_glossary,
       commands::log_error,
       commands::get_environment_info,
       commands::write_recovery,

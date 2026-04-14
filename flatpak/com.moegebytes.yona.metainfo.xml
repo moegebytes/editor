@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.moegebytes.yona</id>
+  <launchable type="desktop-id">com.moegebytes.yona.desktop</launchable>
+  <name>Yona</name>
+  <summary>Desktop editor for translating Visual Novel scripts with built-in dictionaries</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <developer id="com.moegebytes">
+    <name>MoegeBytes</name>
+  </developer>
+
+  <description>
+    <p>Yona is a desktop editor for translating Visual Novel scripts. It pairs Japanese source and English translation files side by side with inline editing, translation progress tracking, and bundled offline dictionaries.</p>
+  </description>
+
+  <url type="homepage">https://github.com/moegebytes/editor</url>
+  <url type="bugtracker">https://github.com/moegebytes/editor/issues</url>
+
+  <categories>
+    <category>Office</category>
+    <category>Translation</category>
+  </categories>
+
+  <requires>
+    <control>keyboard</control>
+    <control>pointing</control>
+
+    <display_length compare="ge">768</display_length>
+  </requires>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="@VERSION@" date="@DATE@" />
+  </releases>
+</component>

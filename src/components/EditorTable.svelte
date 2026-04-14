@@ -1,10 +1,13 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { createVirtualizer } from '@tanstack/svelte-virtual';
   import { StickyNoteIcon, PlusIcon, ChevronRightIcon, ChevronDownIcon, ArrowRightIcon } from '@lucide/svelte';
-  import type { FlatEntry } from '../lib/types';
+
+  import type { FlatEntry, GlossaryEntry } from '../lib/types';
+  import { splitByMatches } from '../lib/segment';
   import { isText, isUntranslated, getFileName, modKey } from '../lib/utils';
-  import { SvelteSet } from 'svelte/reactivity';
+
   import UnsavedChangesDialog from './UnsavedChangesDialog.svelte';
 
   let {
@@ -16,6 +19,7 @@
     onToggleConfirm,
     onNotesChange,
     onJumpNextUnconfirmed,
+    glossary = [],
     confirmedLines = new Set(),
     dirtyIndices = new Map(),
     autoConfirmOnEnter = false,
@@ -32,6 +36,7 @@
     onToggleConfirm?: (index: number, grouped?: boolean) => void;
     onNotesChange?: (index: number, notes: string[]) => void;
     onJumpNextUnconfirmed?: () => void;
+    glossary?: GlossaryEntry[];
     confirmedLines?: Set<number>;
     dirtyIndices?: Map<number, number>;
     autoConfirmOnEnter?: boolean;
@@ -442,13 +447,22 @@
                 <PlusIcon size={12} />
               {/if}
             </button>
+            {@const segments = splitByMatches(entry.jpText ?? '', glossary, (g) => g.jp)}
             <div
               class="cell col-jp"
               class:col-jp-wrap={entry.index === selectedIndex}
               style:padding-left={depthPadding(entry.depth)}
               onmouseup={handleJpMouseUp}
             >
-              {entry.jpText ?? ''}
+              {#each segments as seg}
+                {#if seg.match}
+                  <span class="glossary-term" title="{seg.match.en}{seg.match.note ? ` — ${seg.match.note}` : ''}"
+                    >{seg.text}</span
+                  >
+                {:else}
+                  {seg.text}
+                {/if}
+              {/each}
             </div>
             <div class="cell col-en">
               <input
@@ -703,6 +717,11 @@
       font-style: italic;
       color: var(--color-danger);
     }
+  }
+
+  .glossary-term {
+    border-bottom: 1px dotted var(--color-glossary);
+    cursor: help;
   }
 
   .notes-btn {

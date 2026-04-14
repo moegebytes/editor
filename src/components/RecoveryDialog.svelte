@@ -1,6 +1,7 @@
 <script lang="ts">
-  import Dialog from './ui/Dialog.svelte';
   import { HistoryIcon } from '@lucide/svelte';
+
+  import Dialog from './ui/Dialog.svelte';
 
   let {
     visible = $bindable(false),

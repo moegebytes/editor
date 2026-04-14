@@ -1,8 +1,10 @@
 <script lang="ts">
-  import Dialog from './ui/Dialog.svelte';
   import { ChevronDownIcon, ChevronRightIcon } from '@lucide/svelte';
-  import { getEnvironmentInfo } from '../lib/ipc';
+
   import type { AppSettings, EnvironmentInfo, ProjectSettings } from '../lib/types';
+  import { getEnvironmentInfo } from '../lib/ipc';
+
+  import Dialog from './ui/Dialog.svelte';
 
   let {
     visible = $bindable(false),

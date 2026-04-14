@@ -1,13 +1,15 @@
 <script lang="ts">
+  import { XIcon } from '@lucide/svelte';
+
   import DropdownMenu from './ui/DropdownMenu.svelte';
   import type { MenuEntry } from './ui/DropdownMenu.svelte';
-  import { XIcon } from '@lucide/svelte';
 
   let {
     onSave,
     onExport,
     onCloseProject,
     onOpenDict,
+    onOpenGlossary,
     onToggleFindReplace,
     onJumpUntranslated,
     onJumpUnconfirmed,
@@ -27,6 +29,7 @@
     onExport: () => void;
     onCloseProject: () => void;
     onOpenDict: () => void;
+    onOpenGlossary: () => void;
     onToggleFindReplace: () => void;
     onJumpUntranslated: () => void;
     onJumpUnconfirmed: () => void;
@@ -82,6 +85,8 @@
     { label: 'Go to Line', action: onGoToLine, shortcut: 'Ctrl+G' },
     { label: 'Open Dictionary', action: onOpenDict, shortcut: 'Ctrl+D' },
     { label: 'Find & Replace', action: onToggleFindReplace, shortcut: 'Ctrl+H' },
+    { separator: true },
+    { label: 'Glossary', action: onOpenGlossary },
   ]);
 
   let helpItems: MenuEntry[] = $derived([{ label: 'About', action: onAbout }]);

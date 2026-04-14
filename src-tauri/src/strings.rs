@@ -108,6 +108,23 @@ fn parse_strings_inner(
   Ok(entries)
 }
 
+pub fn collect_file_paths(entries: &[StringsEntry], parent: &Path) -> Vec<PathBuf> {
+  let mut paths = Vec::new();
+  for entry in entries {
+    if let StringsEntry::Include {
+      path: inc_path,
+      entries: sub_entries,
+    } = entry
+    {
+      let resolved = parent.join(inc_path);
+      let sub_parent = resolved.parent().unwrap_or(parent).to_path_buf();
+      paths.push(resolved);
+      paths.extend(collect_file_paths(sub_entries, &sub_parent));
+    }
+  }
+  paths
+}
+
 pub fn write_strings(entries: &[StringsEntry], path: &Path) -> Result<(), StringsError> {
   let parent = path.parent().unwrap_or(Path::new("."));
   let mut lines = Vec::new();

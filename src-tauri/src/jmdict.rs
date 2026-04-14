@@ -211,6 +211,11 @@ impl JmdictDb {
       entries = exact;
     }
 
+    // Tokenizer fallback: split query into content tokens, look up each
+    if entries.is_empty() {
+      entries = self.lookup_tokenized(trimmed)?;
+    }
+
     Ok(LookupResult { entries, inflections })
   }
 
@@ -334,6 +339,43 @@ impl JmdictDb {
       .query_map([&fts_query], |row| row.get(0))?
       .collect::<Result<Vec<_>, _>>()?;
     self.load_entries(&seq_ids)
+  }
+
+  fn lookup_tokenized(&self, query: &str) -> Result<Vec<JmdictEntry>, JmdictError> {
+    trace!("JMdict tokenized fallback for '{}'", query);
+
+    let mut worker = self.tokenizer.new_worker();
+    worker.reset_sentence(query);
+    worker.tokenize();
+
+    let mut seen = std::collections::HashSet::new();
+    let mut entries = Vec::new();
+
+    for i in 0..worker.num_tokens() {
+      let token = worker.token(i);
+      let fields: Vec<&str> = token.feature().split(',').collect();
+      let pos = fields.first().unwrap_or(&"*");
+
+      // Skip punctuation, symbols, particles, auxiliary verbs, fillers
+      if matches!(*pos, "記号" | "助詞" | "助動詞" | "フィラー" | "BOS/EOS") {
+        continue;
+      }
+
+      let surface = token.surface();
+      let base = fields.get(6).filter(|s| **s != "*").unwrap_or(&surface);
+      if !seen.insert(base.to_string()) {
+        continue;
+      }
+
+      let variants = crate::util::kana_variants(base);
+      let mut token_entries = self.lookup_exact(base)?;
+      for v in &variants {
+        merge_entries(&mut token_entries, self.lookup_exact(v)?);
+      }
+      merge_entries(&mut entries, token_entries);
+    }
+
+    Ok(entries)
   }
 
   fn load_entries(&self, seq_ids: &[i64]) -> Result<Vec<JmdictEntry>, JmdictError> {

@@ -46,6 +46,12 @@ export interface Sense {
   xrefs: string[];
 }
 
+export interface GlossaryEntry {
+  jp: string;
+  en: string;
+  note?: string;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface ProjectSettings {}
 
@@ -87,6 +93,7 @@ export interface Project {
   files: ProjectFiles;
   confirmedLines: number[];
   settings: ProjectSettings;
+  glossary: GlossaryEntry[];
   entries: FlatEntry[];
 }
 

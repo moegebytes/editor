@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DictEntry, Inflection } from '../lib/types';
   import { lookupJmdict } from '../lib/ipc';
+
   import KanjiDetail from './KanjiDetail.svelte';
   import KanjiText from './ui/KanjiText.svelte';
 

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { XIcon, SearchIcon, ArrowLeftIcon, ArrowRightIcon } from '@lucide/svelte';
+
   import JmdictTab from './JmdictTab.svelte';
   import WiktTab from './WiktTab.svelte';
 
   const MIN_WIDTH = 360;
   const MAX_WIDTH = 600;
-  const MAX_HISTORY = 100;
+  const MAX_HISTORY = 50;
 
   let {
     query = '',

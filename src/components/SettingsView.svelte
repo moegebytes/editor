@@ -1,6 +1,7 @@
 <script lang="ts">
-  import type { AppSettings, ProjectFiles, ProjectSettings } from '../lib/types';
   import { ArrowLeftIcon, SaveIcon } from '@lucide/svelte';
+
+  import type { AppSettings, ProjectFiles, ProjectSettings } from '../lib/types';
 
   let {
     projectName,

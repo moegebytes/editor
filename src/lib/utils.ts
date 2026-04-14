@@ -1,4 +1,5 @@
 import { platform } from '@tauri-apps/plugin-os';
+
 import type { FlatEntry } from './types';
 
 export function isText(entry: FlatEntry): boolean {

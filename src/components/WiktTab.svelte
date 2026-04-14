@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { WiktResult, WiktRelation } from '../lib/types';
   import { lookupWiktionary } from '../lib/ipc';
+
   import KanjiDetail from './KanjiDetail.svelte';
   import KanjiText from './ui/KanjiText.svelte';
 

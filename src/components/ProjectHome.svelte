@@ -1,8 +1,10 @@
 <script lang="ts">
-  import type { RecentProject } from '../lib/types';
   import { getVersion } from '@tauri-apps/api/app';
   import { XIcon, Trash2Icon, TriangleAlertIcon, SettingsIcon, FolderOpenIcon } from '@lucide/svelte';
+
+  import type { RecentProject } from '../lib/types';
   import { openFileDialog, importProjectDialog } from '../lib/dialogs';
+  import { toast } from '../lib/toast.svelte';
   import {
     listRecentProjects,
     listAllProjects,
@@ -13,9 +15,9 @@
     updateProject,
     openAppDir,
   } from '../lib/ipc';
-  import LoadingOverlay from './ui/LoadingOverlay.svelte';
+
   import Dialog from './ui/Dialog.svelte';
-  import { toast } from '../lib/toast.svelte';
+  import LoadingOverlay from './ui/LoadingOverlay.svelte';
 
   let {
     onNewProject,
@@ -57,8 +59,7 @@
 
   function resetForm() {
     newName = '';
-    newJpPath = '';
-    newEnPath = '';
+    newJpPath = newEnPath = '';
     formError = '';
     importSourcePath = '';
     editTarget = null;
@@ -112,8 +113,7 @@
       const preview = await previewImport(path);
       importSourcePath = path;
       newName = preview.name;
-      newJpPath = '';
-      newEnPath = '';
+      newJpPath = newEnPath = '';
       formError = '';
       showNewForm = true;
     } catch (e) {
@@ -178,6 +178,7 @@
 
   async function confirmDelete() {
     if (!deleteTarget) return;
+    if (editTarget?.id === deleteTarget.id) closeForm();
     await deleteProject(deleteTarget.id);
     deleteTarget = null;
     refreshLists();

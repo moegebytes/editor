@@ -2,19 +2,19 @@
 
 This file provides guidance to Claude Code when working with code in this repository.
 
-## Project Overview
+## Project overview
 
 Desktop app for translating Visual Novel script files. Reads paired JP/EN script files in a custom strings text format,
 displays side-by-side, supports inline editing of English translations with offline Japanese dictionary lookup and
 offline Wiktionary lookup.
 
-## Tech Stack
+## Tech stack
 
 - **Rust + Tauri 2** backend, **Svelte 5 + TypeScript** frontend.
-- **vibrato** (pure Rust, IPADIC MeCab 2.7.0) for Japanese morphological analysis.
+- **vibrato** with IPADIC MeCab 2.7.0 dictionary for Japanese morphological analysis.
 - **JMdict** via SQLite (FTS5) for offline dictionary lookup.
 - **KANJIDIC2** via SQLite for offline kanji lookup.
-- **Wiktionary** via SQLite (FTS5) for offline lookup.
+- **Wiktionary** via SQLite for offline lookup.
 
 ## Project Structure
 
@@ -22,6 +22,7 @@ offline Wiktionary lookup.
 editor/
 ├── CLAUDE.md
 ├── README.md
+├── RESOURCES.md
 ├── LICENSE
 ├── package.json
 ├── index.html
@@ -40,7 +41,8 @@ editor/
 │   │   ├── ipc.ts                   -- Tauri invoke wrappers
 │   │   ├── dialogs.ts               -- Tauri dialog helpers (file/export/import pickers)
 │   │   ├── utils.ts                 -- Shared utilities (entry predicates, set helpers, kanji detection)
-│   │   ├── debounced.svelte.ts      -- useDebouncedValue rune helper
+│   │   ├── segment.ts               -- Generic text splitter for match highlighting
+│   │   ├── debounce.svelte.ts       -- useDebouncedValue rune helper
 │   │   ├── toast.svelte.ts          -- Toast notification store (Svelte 5 runes module)
 │   │   └── undo.svelte.ts           -- Undo/redo stack (command pattern)
 │   └── components/
@@ -57,6 +59,7 @@ editor/
 │       ├── KanjiDetail.svelte
 │       ├── EditorTable.svelte
 │       ├── FindReplaceBar.svelte
+│       ├── GlossaryPanel.svelte
 │       ├── GoToLineDialog.svelte
 │       ├── ProjectHome.svelte
 │       ├── RecoveryDialog.svelte
@@ -82,6 +85,9 @@ editor/
 │       ├── recovery.rs              -- Auto-save recovery file I/O
 │       ├── util.rs                  -- Shared utilities (friendly IO error messages)
 │       └── wiktionary.rs            -- Wiktionary offline SQLite queries
+├── flatpak/                         -- Flatpak packaging
+│   ├── com.moegebytes.yona.yml
+│   └── com.moegebytes.yona.metainfo.xml
 ├── tools/
 │   ├── Cargo.toml
 │   ├── build-jmdict/                -- Offline tool: JMdict XML -> SQLite
@@ -103,7 +109,7 @@ editor/
 **Architecture:** Single Tauri crate, modules for logic. `commands.rs` stays thin (deserialize -> call -> serialize). `tools/` is
 a separate Cargo workspace.
 
-**Logging:** Per-session log files in `config_dir/logs/` (5 max, auto-pruned). File logger at `Debug` level, console at
+**Logging:** Per-session log files in `config_dir/logs/` (10 max, auto-pruned). File logger at `Debug` level, console at
 `Info` (release) or `Debug` (dev). Custom panic hook captures panic info + backtrace to log. All IPC commands log entry
 at `debug!` level. Frontend `window.onerror` and `unhandledrejection` are forwarded to the backend via `log_error` and
 logged with `(WebView)` prefix.
@@ -141,7 +147,7 @@ entry) and compound actions (auto-confirm on Enter groups with preceding text ed
 bounded at 200, survives saves, resets on project close/open. Lives in frontend (`lib/undo.svelte.ts`).
 
 **Dictionary panel:** Two tabs: **JMdict** and **Wiktionary**. Shared search input with search button.
-Back/forward navigation (shared history, 100 entries max). Arrow buttons in header. JMdict tab: Vibrato tokenizes JP
+Back/forward navigation (shared history, 50 entries max). Arrow buttons in header. JMdict tab: Vibrato tokenizes JP
 text, looks up tokens, inflection detection with base form navigation with results ordered by priority.
 Wiktionary tab: Entries grouped by etymology with senses, examples, synonyms, antonyms, coordinate terms, and other
 relations. External query changes auto-search both tabs and reset to JMdict tab. Optional partial (prefix) search
@@ -152,19 +158,23 @@ Project tab controls per-project settings (`ProjectSettings`). Other tabs contro
 persisted in `settings.json`).
 
 **Auto-save:** Periodic recovery file written to `{config_dir}/recovery/{project_id}.recovery.json` when there are
-unsaved changes (default: every 30s, configurable in Editor settings, 0 = disabled). On project open, if a recovery
+unsaved changes (default: every 120s, configurable in Editor settings, 0 = disabled). On project open, if a recovery
 file exists, a dialog offers to restore or discard. Recovery files are cleaned up on explicit save or clean close.
 
 **Find & Replace (Ctrl+H):** Searches EN text in filtered entries. Real-time match count, navigate Enter/Shift+Enter,
 replace current or all.
 
+**Glossary:** Per-project list of JP<->EN term translations (stored in project JSON as `glossary` array of
+`{ jp, en, note? }`). Editable via Tools -> Glossary panel. Glossary JP terms are highlighted inline in the Japanese
+text column with a dotted underline; hovering shows the expected EN translation and optional note.
+
 **Context menu:** Custom (replaces WebView default). Cut/Copy/Paste/Select All on editable elements.
 
 **Status bar:** Left: modified/saved. Right: confirmed/translated/total with dual progress bar.
 
-## Tauri IPC Commands
+## IPC
 
-**ProjectWithEntries:** `id` + Project fields (name, files, confirmedLines, settings) via
+**ProjectWithEntries:** `id` + Project fields (name, files, confirmedLines, settings, glossary) via
 `#[serde(flatten)]` + `entries: Vec<FlatEntry>`.
 
 **FlatEntry** (`#[serde(rename_all = "camelCase")]`): `index`, `entry_type` (Text/Comment/Include/Emit/Blank),
@@ -193,6 +203,11 @@ open_app_dir() -> ()
 ```
 preview_import(source_path) -> ImportPreview { name, confirmedCount }
 import_project(source_path, name, files: {jp, en}) -> ProjectWithEntries
+```
+
+### Glossary
+```
+update_glossary(glossary: Vec<GlossaryEntry { jp, en, note? }>) -> ()
 ```
 
 ### Dictionary
@@ -246,120 +261,32 @@ zstd -d resources/src/kanjidic2.xml.zst
 cd tools && cargo run -p build-kanjidic -- \
   ../resources/src/kanjidic2.xml ../resources/gen/
 
-# build wiktionary database (one-time)
+# build Wiktionary database (one-time)
 zstd -d resources/src/enwiktionary-ja_en.jsonl.zst
 cd tools && cargo run -p build-wiktionary -- \
   ../resources/src/enwiktionary-ja_en.jsonl ../resources/gen/
 ```
 
 ```bash
-# install frontend deps
-pnpm install
-
-# lint (all linters in parallel)
-pnpm lint
-
-# format frontend code
-pnpm format
-
-# run tests
-pnpm check && pnpm test
-
-# dev mode with hot reload
-pnpm tauri dev
-
-# production build
-pnpm tauri build
-
-# clean build artifacts
-pnpm clean
+pnpm install # install frontend deps
+pnpm lint # lint (all linters in parallel)
+pnpm format # format frontend code
+pnpm check && pnpm test # run tests
+pnpm tauri dev # dev mode with hot reload
+pnpm tauri build # production build
+pnpm clean # clean build artifacts
 ```
 
-### Preparing fresh Wiktionary JSON
+Verify that `pnpm lint` and `pnpm test` produce no warnings/errors before committing.
 
-```bash
-# clone repository
-git clone https://github.com/tatuylonen/wiktextract.git && \
-  git checkout 05c257fdecbc64e73a31a2ca2c0f6cb0ee4c0a68
+## Conventions
 
-# apply patch for romaji (https://github.com/tatuylonen/wiktextract/issues/1620)
-git apply <<EOF
-diff --git a/src/wiktextract/extractor/en/example.py b/src/wiktextract/extractor/en/example.py
-index a224f3c2..fce55506 100644
---- a/src/wiktextract/extractor/en/example.py
-+++ b/src/wiktextract/extractor/en/example.py
-@@ -167,7 +167,7 @@ def extract_template_ja_usex(
-         )
-         example_data["ruby"] = ruby_data
-     for span_tag in expanded_node.find_html_recursively(
--        "span", attr_name="class", attr_value="tr"
-+        "span", attr_name="class", attr_value="e-transliteration"
-     ):
-         example_data["roman"] = clean_node(wxr, None, span_tag)
-         calculate_bold_offsets(
-@@ -177,6 +177,7 @@ def extract_template_ja_usex(
-             example_data,
-             "bold_roman_offsets",
-         )
-+        break
-     tr_arg = wxr.wtp.parse(
-         wxr.wtp.node_to_wikitext(node.template_parameters.get(3, "")),
-         expand_all=True,
-EOF
-
-# set up venv
-python3 -m venv .venv
-pip install -U pip && pip install -e .
-
-# download xml dump
-wget https://dumps.wikimedia.org/enwiktionary/latest/enwiktionary-latest-pages-articles.xml.bz2
-
-# prepare database
-wiktwords --db-path enwiktionary-latest.db --edition en --skip-extraction enwiktionary-latest-pages-articles.xml.bz2
-
-# extract entries
-wiktwords --db-path enwiktionary-latest.db --edition en --language-code ja \
-  --examples --etymologies --linkages --pronunciations --out enwiktionary-ja.jsonl
-
-wiktwords --db-path enwiktionary-latest.db --edition en --language-code en \
-  --examples --etymologies --linkages --pronunciations --out enwiktionary-en.jsonl
-
-# combine both languages, keep only fields used by build-wiktionary, and clean-up
-# remaining stale elements such as redirects or unrelated thesaurus entries
-cat <<'EOF' > enwiktionary-ja_en.jq
-def rels: [.[]? | {word}];
-def examples: [.[]? | {text, english, translation, roman}
-  | with_entries(select(.value != null))
-  | select(.text != null and .text != "")];
-
-select(has("senses") and has("pos") and (.senses | length > 0))
-| (.lang_code == "en") as $en
-| {word, pos, lang_code, etymology_number, 
-   forms: [.forms[]? | {form, ruby, tags} | with_entries(select(.value != null))],
-   sounds: [.sounds[]? | select(has("ipa")) | {ipa}],
-   synonyms: (.synonyms | rels), antonyms: (.antonyms | rels),
-   coordinate_terms: (.coordinate_terms | rels), related: (.related | rels),
-   derived: (.derived | rels), hyponyms: (.hyponyms | rels),
-   senses: [.senses[] | {glosses, tags,
-     synonyms: (.synonyms | rels), antonyms: (.antonyms | rels),
-     coordinate_terms: (.coordinate_terms | rels), related: (.related | rels),
-     derived: (.derived | rels), hypernyms: (.hypernyms | rels),
-     hyponyms: (.hyponyms | rels),
-     examples: (if $en then null else .examples | examples end)}
-   | with_entries(select(.value != null and .value != []))]}
-| with_entries(select(.value != null and .value != []))
-EOF
-jq -cf enwiktionary-ja_en.jq enwiktionary-ja.jsonl enwiktionary-en.jsonl > enwiktionary-ja_en.jsonl
-```
-
-## Coding Conventions
-
-- **Rust:** `anyhow` for app errors, `thiserror` for module error types. `rustfmt` + `clippy`.
-- **Linting:** `pnpm lint` runs ESLint, Prettier, clippy, and rustfmt in parallel. `printWidth`/`max_width` = 150.
-- **TypeScript:** Strict mode. Svelte 5 runes (`$state`, `$derived`, `$props`). No legacy stores.
+- **Rust:** `anyhow` for app errors, `thiserror` for module error types.
+- **Linting:** `pnpm lint` runs ESLint, Prettier, clippy, and rustfmt in parallel. `printWidth`/`max_width` = 120.
+- **TypeScript:** Strict mode. Svelte 5 runes (`$state`, `$derived`, `$props`). No legacy stores. Imports ordered in
+groups separated by blank lines: external, internal libs (`./lib/*`), components (`./components/*`).
 - **IPC boundary:** JSON via `serde` with `#[serde(rename_all = "camelCase")]`. Keep types flat.
 - **Package management:** pnpm via corepack.
 - **Testing:** Unit tests in `src-tauri/src/` modules.
-- **Svelte a11y:** Warnings suppressed globally (desktop app).
 - **@tanstack/svelte-virtual:** Svelte 5 requires `$derived(createVirtualizer(...))` with scroll element read at top
 level (not inside closure).

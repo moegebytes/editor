@@ -10,7 +10,7 @@ use tauri_plugin_opener::OpenerExt;
 use crate::core::FlatEntry;
 use crate::jmdict::{JmdictDb, LookupResult};
 use crate::kanjidic::{KanjiDb, KanjiEntry};
-use crate::project::{self, Project, ProjectFiles, ProjectSettings, RecentProject};
+use crate::project::{self, GlossaryEntry, Project, ProjectFiles, ProjectSettings, RecentProject};
 use crate::recovery::{RecoveryData, RecoveryEntry, RecoveryInfo};
 use crate::settings::AppSettings;
 use crate::wiktionary::{WiktDb, WiktResult};
@@ -291,14 +291,53 @@ pub fn export_project(dest_path: String, state: State<'_, ProjectState>) -> Resu
   debug!("Exporting project to '{}'", dest_path);
 
   state.with_ref(|proj, _| {
+    let dest = Path::new(&dest_path);
+    let file = std::fs::File::create(dest)
+      .map_err(|e| crate::util::log_err(crate::util::friendly_io_msg("Export file", dest, &e)))?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
     let mut exported = proj.clone();
     exported.files = ProjectFiles {
       jp: String::new(),
       en: String::new(),
     };
     let json = serde_json::to_string(&exported).map_err(|e| format!("serialize error: {}", e))?;
-    std::fs::write(&dest_path, &json)
-      .map_err(|e| crate::util::log_err(crate::util::friendly_io_msg("", Path::new(&dest_path), &e)))
+    zip
+      .start_file("project.json", options)
+      .map_err(|e| crate::util::log_err(format!("Could not write to ZIP archive: {e}.")))?;
+    std::io::Write::write_all(&mut zip, json.as_bytes())
+      .map_err(|e| crate::util::log_err(format!("Could not write to ZIP archive: {e}.")))?;
+
+    for (prefix, top_path) in [("jp", &proj.files.jp), ("en", &proj.files.en)] {
+      let top = Path::new(top_path);
+      let root = top.parent().unwrap_or(Path::new("."));
+      let entries =
+        crate::strings::parse_strings(top).map_err(|e| crate::util::log_err(map_strings_err(&e, prefix)))?;
+      let mut paths = vec![top.to_path_buf()];
+      paths.extend(crate::strings::collect_file_paths(&entries, root));
+
+      for path in &paths {
+        let relative = path
+          .strip_prefix(root)
+          .unwrap_or(path)
+          .to_string_lossy()
+          .replace('\\', "/");
+        let zip_path = format!("{prefix}/{relative}");
+        zip
+          .start_file(&zip_path, options)
+          .map_err(|e| crate::util::log_err(format!("Could not write to ZIP archive: {e}.")))?;
+        let content = std::fs::read(path)
+          .map_err(|e| crate::util::log_err(crate::util::friendly_io_msg("Strings file", path, &e)))?;
+        std::io::Write::write_all(&mut zip, &content)
+          .map_err(|e| crate::util::log_err(format!("Could not write to ZIP archive: {e}.")))?;
+      }
+    }
+
+    zip
+      .finish()
+      .map_err(|e| crate::util::log_err(format!("Could not finalize ZIP archive: {e}.")))?;
+    Ok(())
   })
 }
 
@@ -366,9 +405,12 @@ pub fn import_project(
 
   let imported = read_import_file(&source_path)?;
   let entries = pair_files(&files)?;
-  let (id, mut proj, path) = project::create_project(&data_dir.0, &name, files).map_err(crate::util::log_err)?;
-  proj.confirmed_lines = imported.confirmed_lines;
-  proj.settings = imported.settings;
+  let (id, new_proj, path) = project::create_project(&data_dir.0, &name, files).map_err(crate::util::log_err)?;
+  let proj = Project {
+    name: new_proj.name,
+    files: new_proj.files,
+    ..imported
+  };
   project::save_project(&path, &proj).map_err(crate::util::log_err)?;
   let ret = proj.clone();
   state.set(id.clone(), proj, path)?;
@@ -418,6 +460,15 @@ pub fn update_app_settings(
   let mut lock = state.0.lock().map_err(|e| e.to_string())?;
   *lock = settings;
   Ok(())
+}
+
+#[tauri::command]
+pub fn update_glossary(glossary: Vec<GlossaryEntry>, state: State<'_, ProjectState>) -> Result<(), String> {
+  debug!("Updating glossary ({} entries)", glossary.len());
+  state.with_mut(|proj, path| {
+    proj.glossary = glossary;
+    project::save_project(path, proj).map_err(crate::util::log_err)
+  })
 }
 
 #[tauri::command]

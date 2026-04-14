@@ -10,7 +10,6 @@
   } = $props();
 
   let confirmedPct = $derived(stats.totalText > 0 ? Math.round((stats.confirmed / stats.totalText) * 100) : 0);
-
   let translatedPct = $derived(stats.totalText > 0 ? Math.round((stats.translated / stats.totalText) * 100) : 0);
 </script>
 

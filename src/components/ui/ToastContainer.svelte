@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { toast } from '../../lib/toast.svelte';
   import { XIcon, CircleCheckIcon, CircleXIcon, InfoIcon } from '@lucide/svelte';
+
+  import { toast } from '../../lib/toast.svelte';
 
   const iconMap = {
     error: CircleXIcon,

@@ -4,6 +4,7 @@ import type {
   AppSettingsResponse,
   EnvironmentInfo,
   FlatEntry,
+  GlossaryEntry,
   ImportPreview,
   KanjiEntry,
   LookupResult,
@@ -97,6 +98,10 @@ export async function previewImport(sourcePath: string): Promise<ImportPreview> 
 
 export async function importProject(sourcePath: string, name: string, files: ProjectFiles): Promise<Project> {
   return invoke('import_project', { sourcePath, name, files });
+}
+
+export async function updateGlossary(glossary: GlossaryEntry[]): Promise<void> {
+  return invoke('update_glossary', { glossary });
 }
 
 export async function openAppDir(): Promise<void> {

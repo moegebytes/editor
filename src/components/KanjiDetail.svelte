@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { XIcon } from '@lucide/svelte';
+
   import type { KanjiEntry } from '../lib/types';
   import { lookupKanji } from '../lib/ipc';
-  import { XIcon } from '@lucide/svelte';
 
   let kanjiDetail: KanjiEntry | null = $state(null);
   let error: string | null = $state(null);

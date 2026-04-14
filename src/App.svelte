@@ -1,9 +1,21 @@
 <script lang="ts">
-  import type { AppSettings, FlatEntry, ProjectFiles, ProjectSettings, RecoveryEntry } from './lib/types';
-  import { isText, isTranslated, isUntranslated, modKey } from './lib/utils';
-  import { useDebouncedValue } from './lib/debounced.svelte';
+  import dayjs from 'dayjs';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
+
+  import type {
+    AppSettings,
+    FlatEntry,
+    GlossaryEntry,
+    ProjectFiles,
+    ProjectSettings,
+    RecoveryEntry,
+  } from './lib/types';
   import { type Command, UndoStack } from './lib/undo.svelte';
+  import { useDebouncedValue } from './lib/debounce.svelte.js';
   import { exportProjectDialog } from './lib/dialogs';
+  import { isText, isTranslated, isUntranslated, modKey } from './lib/utils';
+  import { toast } from './lib/toast.svelte';
   import {
     checkRecovery,
     closeProject,
@@ -19,25 +31,25 @@
     saveTranslation,
     unconfirmLine,
     updateAppSettings,
+    updateGlossary,
     updateProject,
     writeRecovery,
   } from './lib/ipc';
-  import Toolbar from './components/Toolbar.svelte';
-  import EditorTable from './components/EditorTable.svelte';
-  import FindReplaceBar from './components/FindReplaceBar.svelte';
-  import DictionaryPanel from './components/DictionaryPanel.svelte';
-  import StatusBar from './components/StatusBar.svelte';
-  import ProjectHome from './components/ProjectHome.svelte';
-  import ContextMenu from './components/ui/ContextMenu.svelte';
-  import SettingsView from './components/SettingsView.svelte';
-  import GoToLineDialog from './components/GoToLineDialog.svelte';
+
   import AboutDialog from './components/AboutDialog.svelte';
+  import ContextMenu from './components/ui/ContextMenu.svelte';
+  import DictionaryPanel from './components/DictionaryPanel.svelte';
+  import EditorTable from './components/EditorTable.svelte';
+  import GlossaryPanel from './components/GlossaryPanel.svelte';
+  import FindReplaceBar from './components/FindReplaceBar.svelte';
+  import GoToLineDialog from './components/GoToLineDialog.svelte';
+  import ProjectHome from './components/ProjectHome.svelte';
   import RecoveryDialog from './components/RecoveryDialog.svelte';
-  import UnsavedChangesDialog from './components/UnsavedChangesDialog.svelte';
-  import { getCurrentWindow } from '@tauri-apps/api/window';
-  import { toast } from './lib/toast.svelte';
-  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+  import SettingsView from './components/SettingsView.svelte';
+  import StatusBar from './components/StatusBar.svelte';
   import ToastContainer from './components/ui/ToastContainer.svelte';
+  import Toolbar from './components/Toolbar.svelte';
+  import UnsavedChangesDialog from './components/UnsavedChangesDialog.svelte';
 
   // Project
   let projectId: string | null = $state(null);
@@ -47,6 +59,8 @@
   let projectSettings: ProjectSettings = $state({});
   let appSettings: AppSettings = $state({ autoConfirmOnEnter: false, partialSearch: false, autoSaveIntervalSecs: 0 });
   let minAutoSaveIntervalSecs = $state(30);
+  let glossary: GlossaryEntry[] = $state([]);
+  let glossaryVisible = $state(false);
   let settingsVisible = $state(false);
   let goToLineVisible = $state(false);
   let aboutVisible = $state(false);
@@ -70,6 +84,7 @@
   const debouncedFilter = useDebouncedValue(() => filterText, 150);
   let findReplaceVisible = $state(false);
   let findQuery = $state('');
+  let findCaseSensitive = $state(false);
   let findMatchIndices: number[] = $state([]);
   let currentFindMatch = $state(-1);
   let toolbarRef: Toolbar = $state() as Toolbar;
@@ -118,6 +133,7 @@
 
   $effect(() => {
     void debouncedFilter.value;
+    void findCaseSensitive;
     if (findQuery) computeFindMatches(findQuery);
   });
 
@@ -170,6 +186,7 @@
     confirmedLines.clear();
     for (const i of proj.confirmedLines) confirmedLines.add(i);
     projectSettings = proj.settings;
+    glossary = proj.glossary ?? [];
     entries = proj.entries;
     dirtyIndices.clear();
     undoStack.clear();
@@ -264,6 +281,16 @@
     }
   }
 
+  async function handleSaveGlossary(newGlossary: GlossaryEntry[]) {
+    try {
+      await updateGlossary(newGlossary);
+      glossary = newGlossary;
+      toast.success('Glossary saved');
+    } catch (e) {
+      toast.error(`Failed to save glossary: ${e}`);
+    }
+  }
+
   async function handleSave() {
     if (!hasProject) return;
     try {
@@ -282,7 +309,8 @@
   }
 
   async function handleExport() {
-    const path = await exportProjectDialog();
+    const date = dayjs().format('YYYY-MM-DD HH-mm-ss');
+    const path = await exportProjectDialog(`${projectName} - ${date}.zip`);
     if (!path) return;
     try {
       await exportProject(path);
@@ -303,11 +331,14 @@
     undoStack.clear();
     confirmedLines.clear();
     projectSettings = {};
+    glossary = [];
+    glossaryVisible = false;
     modified = false;
     selectedIndex = -1;
     filterText = '';
     findReplaceVisible = false;
     findQuery = '';
+    findCaseSensitive = false;
     findMatchIndices = [];
     currentFindMatch = -1;
   }
@@ -420,18 +451,19 @@
       currentFindMatch = -1;
       return;
     }
-    const lower = query.toLowerCase();
+    const needle = findCaseSensitive ? query : query.toLowerCase();
     const fLower = debouncedFilter.value.toLowerCase();
     const matches: number[] = [];
     for (const entry of entries) {
       if (!isText(entry)) continue;
+      const enText = entry.enText ?? '';
+      const enLower = findCaseSensitive && !fLower ? '' : enText.toLowerCase();
       if (fLower) {
-        const jp = (entry.jpText ?? '').toLowerCase();
-        const en = (entry.enText ?? '').toLowerCase();
-        if (!jp.includes(fLower) && !en.includes(fLower)) continue;
+        const jpLower = (entry.jpText ?? '').toLowerCase();
+        if (!jpLower.includes(fLower) && !enLower.includes(fLower)) continue;
       }
-      const en = (entry.enText ?? '').toLowerCase();
-      if (en.includes(lower)) matches.push(entry.index);
+      const haystack = findCaseSensitive ? enText : enLower;
+      if (haystack.includes(needle)) matches.push(entry.index);
     }
     findMatchIndices = matches;
     currentFindMatch = matches.length > 0 ? 0 : -1;
@@ -449,13 +481,16 @@
     selectedIndex = findMatchIndices[currentFindMatch];
   }
 
+  function normalize(s: string): string {
+    return findCaseSensitive ? s : s.toLowerCase();
+  }
+
   function replaceCurrent(replacement: string) {
     if (currentFindMatch < 0 || !findQuery) return;
     const idx = findMatchIndices[currentFindMatch];
     const entry = entries[idx];
     if (!entry.enText) return;
-    const lower = entry.enText.toLowerCase();
-    const pos = lower.indexOf(findQuery.toLowerCase());
+    const pos = normalize(entry.enText).indexOf(normalize(findQuery));
     if (pos < 0) return;
     const oldText = entry.enText;
     entries[idx].enText = entry.enText.substring(0, pos) + replacement + entry.enText.substring(pos + findQuery.length);
@@ -467,17 +502,17 @@
 
   function replaceAll(query: string, replacement: string) {
     if (!query) return;
-    const lower = query.toLowerCase();
+    const needle = normalize(query);
     const matchSet = new Set(findMatchIndices);
     const commands: Command[] = [];
     for (const entry of entries) {
       if (!matchSet.has(entry.index) || !entry.enText) continue;
       const en = entry.enText;
+      const haystack = normalize(en);
       let result = '';
       let i = 0;
-      const enLower = en.toLowerCase();
       while (i < en.length) {
-        const pos = enLower.indexOf(lower, i);
+        const pos = haystack.indexOf(needle, i);
         if (pos < 0) {
           result += en.substring(i);
           break;
@@ -600,6 +635,8 @@
       onOpenProject={handleOpenProject}
       {loading}
     />
+  {:else if glossaryVisible}
+    <GlossaryPanel {glossary} onBack={() => (glossaryVisible = false)} onSave={handleSaveGlossary} />
   {:else if settingsVisible}
     <SettingsView
       projectName={projectName ?? ''}
@@ -617,6 +654,7 @@
       onExport={handleExport}
       onCloseProject={handleCloseProject}
       onOpenDict={() => (dictVisible = true)}
+      onOpenGlossary={() => (glossaryVisible = true)}
       onToggleFindReplace={() => (findReplaceVisible = !findReplaceVisible)}
       onJumpUntranslated={jumpToNextUntranslated}
       onJumpUnconfirmed={jumpToNextUnconfirmed}
@@ -649,6 +687,7 @@
           bind:selectedIndex
           onSave={handleSave}
           onJpSelect={handleJpSelect}
+          {glossary}
           filterText={debouncedFilter.value}
           {findQuery}
           {findMatchIndices}
@@ -659,6 +698,7 @@
 
     <FindReplaceBar
       bind:visible={findReplaceVisible}
+      bind:caseSensitive={findCaseSensitive}
       onFind={computeFindMatches}
       onFindNext={findNext}
       onFindPrev={findPrev}

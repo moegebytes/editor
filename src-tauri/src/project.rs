@@ -13,6 +13,15 @@ use crate::util::friendly_io_msg;
 pub struct ProjectSettings {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlossaryEntry {
+  pub jp: String,
+  pub en: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectFiles {
   pub jp: String,
   pub en: String,
@@ -33,6 +42,8 @@ pub struct Project {
   pub confirmed_lines: BTreeSet<usize>,
   #[serde(default)]
   pub settings: ProjectSettings,
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  pub glossary: Vec<GlossaryEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,7 +59,7 @@ pub struct RecentIds {
 }
 
 impl RecentIds {
-  const MAX_RECENT: usize = 10;
+  const MAX_RECENT: usize = 5;
 
   pub fn add(&mut self, id: &str) {
     self.ids.retain(|i| i != id);
@@ -107,6 +118,7 @@ pub fn create_project(app_data: &Path, name: &str, files: ProjectFiles) -> Resul
     files,
     confirmed_lines: BTreeSet::new(),
     settings: ProjectSettings::default(),
+    glossary: Vec::new(),
   };
 
   let json = serde_json::to_string(&project).map_err(|e| format!("serialize error: {}", e))?;
