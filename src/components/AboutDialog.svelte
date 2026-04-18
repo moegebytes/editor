@@ -4,6 +4,7 @@
   import type { AppSettings, EnvironmentInfo, ProjectSettings } from '../lib/types';
   import { getEnvironmentInfo } from '../lib/ipc';
 
+  import CopyButton from './ui/CopyButton.svelte';
   import Dialog from './ui/Dialog.svelte';
 
   let {
@@ -53,20 +54,6 @@
     }
     return lines.join('\n');
   });
-
-  let copied = $state(false);
-  let copyTimer: ReturnType<typeof setTimeout> | undefined;
-
-  $effect(() => {
-    return () => clearTimeout(copyTimer);
-  });
-
-  function handleCopy() {
-    navigator.clipboard.writeText(detailsText);
-    copied = true;
-    clearTimeout(copyTimer);
-    copyTimer = setTimeout(() => (copied = false), 2000);
-  }
 </script>
 
 <Dialog title="About" bind:visible>
@@ -109,9 +96,7 @@
       {#if detailsOpen}
         <div class="details-body">
           <pre>{detailsText}</pre>
-          <button class="copy-btn" class:copied onclick={handleCopy}>
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
+          <CopyButton text={detailsText} />
         </div>
       {/if}
     </div>
@@ -199,6 +184,12 @@
   .details-body {
     margin-top: 8px;
     position: relative;
+
+    :global(.copy-btn) {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+    }
   }
 
   .details-body pre {
@@ -206,34 +197,11 @@
     line-height: 1.5;
     background: var(--color-surface-alt);
     border: 1px solid var(--color-border);
-    border-radius: 4px;
+    border-radius: var(--radius-md);
     padding: 10px 12px;
     margin: 0;
     white-space: pre-wrap;
     word-break: break-all;
     user-select: text;
-  }
-
-  .copy-btn {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 3px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-muted);
-    cursor: pointer;
-
-    &:hover {
-      color: var(--color-text);
-      border-color: var(--color-text-muted);
-    }
-
-    &.copied {
-      color: var(--color-success-text);
-      border-color: var(--color-success-border);
-    }
   }
 </style>

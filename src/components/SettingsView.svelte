@@ -1,7 +1,11 @@
 <script lang="ts">
-  import { ArrowLeftIcon, SaveIcon } from '@lucide/svelte';
+  import { BookOpenIcon, FileIcon, FolderIcon, PencilIcon, SettingsIcon } from '@lucide/svelte';
 
   import type { AppSettings, ProjectFiles, ProjectSettings } from '../lib/types';
+
+  import CopyButton from './ui/CopyButton.svelte';
+  import PathText from './ui/PathText.svelte';
+  import ViewHeader from './ui/ViewHeader.svelte';
 
   let {
     projectName,
@@ -23,7 +27,7 @@
 
   let nameInput = $state('');
   let draftApp: AppSettings = $state({ ...appSettings });
-  let activeTab: 'project' | 'editor' | 'dictionary' = $state('project');
+  let activeTab: string = $state('Project');
 
   $effect(() => {
     nameInput = projectName;
@@ -37,73 +41,103 @@
       draftApp.autoSaveIntervalSecs !== appSettings.autoSaveIntervalSecs,
   );
 
-  function save() {
-    const trimmedName = nameInput.trim() || projectName;
-    if (draftApp.autoSaveIntervalSecs > 0 && draftApp.autoSaveIntervalSecs < minAutoSaveIntervalSecs) {
-      draftApp.autoSaveIntervalSecs = minAutoSaveIntervalSecs;
-    }
+  function handleBack() {
     if (hasChanges) {
+      const trimmedName = nameInput.trim() || projectName;
+      if (draftApp.autoSaveIntervalSecs > 0 && draftApp.autoSaveIntervalSecs < minAutoSaveIntervalSecs) {
+        draftApp.autoSaveIntervalSecs = minAutoSaveIntervalSecs;
+      }
       appSettings = { ...draftApp };
       onSave(trimmedName, settings, draftApp);
     }
+    onBack();
   }
 </script>
 
 <div class="settings-view">
-  <div class="settings-header">
-    <button class="back-btn" onclick={onBack}>
-      <ArrowLeftIcon size={16} />
-      <span>Back</span>
-    </button>
-    <div class="header-spacer"></div>
-    <button class="btn-primary save-btn" onclick={save} disabled={!hasChanges}>
-      <SaveIcon size={14} />
-      <span>Save</span>
-    </button>
-  </div>
+  <ViewHeader onBack={handleBack}>
+    <SettingsIcon size={14} />
+    Settings / <strong>{activeTab}</strong>
+  </ViewHeader>
 
   <div class="settings-body">
-    <h1>Settings</h1>
-    <div class="tabs-layout">
-      <div class="tabs">
-        <button class="tab" class:tab-active={activeTab === 'project'} onclick={() => (activeTab = 'project')}>
+    <nav class="sidebar">
+      <div class="tab-group">
+        <div class="group-label">This project</div>
+        <button class="tab" class:tab-active={activeTab === 'Project'} onclick={() => (activeTab = 'Project')}>
+          <span class="tab-icon"><FolderIcon size={14} /></span>
           Project
         </button>
-        <button class="tab" class:tab-active={activeTab === 'editor'} onclick={() => (activeTab = 'editor')}>
+      </div>
+      <div class="tab-group">
+        <div class="group-label">Application</div>
+        <button class="tab" class:tab-active={activeTab === 'Editor'} onclick={() => (activeTab = 'Editor')}>
+          <span class="tab-icon"><PencilIcon size={14} /></span>
           Editor
         </button>
-        <button class="tab" class:tab-active={activeTab === 'dictionary'} onclick={() => (activeTab = 'dictionary')}>
+        <button class="tab" class:tab-active={activeTab === 'Dictionary'} onclick={() => (activeTab = 'Dictionary')}>
+          <span class="tab-icon"><BookOpenIcon size={14} /></span>
           Dictionary
         </button>
       </div>
+    </nav>
 
-      <div class="tab-content">
-        {#if activeTab === 'project'}
-          <div class="field-row">
-            <label class="field-label" for="project-name">Project Name</label>
-            <input id="project-name" type="text" bind:value={nameInput} class="field-input" />
+    <main class="content">
+      {#if activeTab === 'Project'}
+        <h1>Project</h1>
+        <p>Settings specific to this project.</p>
+
+        <section class="card">
+          <h2>General</h2>
+          <p>Shown in the project picker and window title.</p>
+          <div class="field">
+            <label class="field-label" for="project-name">Project name</label>
+            <input id="project-name" type="text" class="field-input" bind:value={nameInput} />
           </div>
-          <div class="field-row">
-            <span class="field-label">Japanese File</span>
-            <span class="field-path text-ellipsis" title={files.jp}>{files.jp}</span>
+        </section>
+
+        <section class="card">
+          <h2>Source files</h2>
+          <div class="field">
+            <span class="field-label">Japanese</span>
+            <div class="path-row">
+              <FileIcon size={14} />
+              <PathText path={files.jp} />
+              <CopyButton text={files.jp} title="Copy path" />
+            </div>
           </div>
-          <div class="field-row">
-            <span class="field-label">English File</span>
-            <span class="field-path text-ellipsis" title={files.en}>{files.en}</span>
+          <div class="field">
+            <span class="field-label">English</span>
+            <div class="path-row">
+              <FileIcon size={14} />
+              <PathText path={files.en} />
+              <CopyButton text={files.en} title="Copy path" />
+            </div>
           </div>
-          <p class="field-hint">To change file paths, close the project and edit it from the home screen.</p>
-        {:else if activeTab === 'editor'}
+        </section>
+      {:else if activeTab === 'Editor'}
+        <h1>Editor</h1>
+        <p>How the translation grid behaves while you work.</p>
+
+        <section class="card">
+          <h2>Editing behavior</h2>
           <label class="check-row">
             <input type="checkbox" bind:checked={draftApp.autoConfirmOnEnter} />
-            <span class="check-text">
-              <span class="check-label">Auto-confirm on Enter</span>
-              <span class="check-hint">
-                Pressing Enter to move to the next line will also mark the current line as confirmed.
-              </span>
+            <span>
+              Auto-confirm on Enter
+              <small>Pressing Enter to move to the next line will also mark the current line as confirmed.</small>
             </span>
           </label>
-          <div class="field-row">
-            <label class="field-label" for="auto-save-interval">Auto-save interval (seconds)</label>
+        </section>
+
+        <section class="card">
+          <h2>Auto-save</h2>
+          <p>
+            How often to write a recovery file when there are unsaved changes. Minimum
+            {minAutoSaveIntervalSecs}s, set to 0 to disable.
+          </p>
+          <div class="field field-inline">
+            <label class="field-label" for="auto-save-interval">Interval</label>
             <input
               id="auto-save-interval"
               type="number"
@@ -112,25 +146,27 @@
               class="field-input field-input-narrow"
               bind:value={draftApp.autoSaveIntervalSecs}
             />
+            <span class="text-muted text-sm">seconds</span>
           </div>
-          <p class="field-hint">
-            How often to write a recovery file when there are unsaved changes. Minimum {minAutoSaveIntervalSecs}s, set
-            to 0 to disable.
-          </p>
-        {:else}
+        </section>
+      {:else}
+        <h1>Dictionary</h1>
+        <p>How JMdict and Wiktionary lookups match what you type.</p>
+
+        <section class="card">
+          <h2>Search</h2>
           <label class="check-row">
             <input type="checkbox" bind:checked={draftApp.partialSearch} />
-            <span class="check-text">
-              <span class="check-label">Partial search</span>
-              <span class="check-hint">
-                Always use prefix matching instead of prioritizing exact matches. Applies to JMdict and Wiktionary
-                (Japanese entries only).
-              </span>
+            <span>
+              Partial search
+              <small>
+                Always use prefix matching instead of prioritizing exact matches. Applies to JMdict and Wiktionary.
+              </small>
             </span>
           </label>
-        {/if}
-      </div>
-    </div>
+        </section>
+      {/if}
+    </main>
   </div>
 </div>
 
@@ -142,158 +178,173 @@
     background: var(--color-bg);
   }
 
-  .settings-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
-
-    button {
-      font-weight: 600;
-    }
-  }
-
-  .header-spacer {
-    flex: 1;
-  }
-
-  .back-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    font-size: 13px;
-  }
-
-  .save-btn {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 12px;
-    font-size: 13px;
-  }
-
   .settings-body {
     flex: 1;
     display: flex;
-    flex-direction: column;
     overflow: hidden;
-    padding: 28px 32px 0;
-
-    h1 {
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--color-text);
-      margin-bottom: 20px;
-    }
   }
 
-  .tabs-layout {
-    display: flex;
-    gap: 0;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .tabs {
+  .sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    padding: 18px 10px;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    min-width: 160px;
-    flex-shrink: 0;
-    padding: 8px 0;
-    border-right: 1px solid var(--color-border);
-  }
-
-  .tab {
-    padding: 10px 20px;
-    font-size: 16px;
-    background: none;
-    border: none;
-    border-left: 2px solid transparent;
-    border-radius: 0;
-    color: var(--color-text-muted);
-    cursor: pointer;
-    text-align: left;
-    transition:
-      color 0.15s,
-      border-color 0.15s,
-      background 0.15s;
-
-    &:hover {
-      color: var(--color-text);
-      background: var(--color-surface);
-    }
-  }
-
-  .tab-active {
-    color: var(--color-accent);
-    border-left-color: var(--color-accent);
-    background: var(--color-surface);
-
-    &:hover {
-      color: var(--color-accent);
-    }
-  }
-
-  .tab-content {
-    flex: 1;
-    padding: 20px 28px;
+    gap: 14px;
     overflow-y: auto;
   }
 
-  .field-row {
+  .tab-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .group-label {
+    padding: 4px 12px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-text-disabled);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .tab {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 8px 0;
+    gap: 12px;
+    padding: 11px 12px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-align: left;
+
+    &:hover:not(.tab-active) {
+      background: var(--color-input-bg);
+    }
+
+    &.tab-active {
+      background: var(--color-input-bg);
+      color: var(--color-text);
+
+      .tab-icon {
+        background: var(--color-accent);
+        color: #fff;
+      }
+    }
+  }
+
+  .tab-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-md);
+    background: var(--color-input-bg);
+  }
+
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 36px 48px;
+
+    > h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    > h1 + p {
+      font-size: 13px;
+      color: var(--color-text-muted);
+      margin: 4px 0 24px;
+    }
+  }
+
+  .card {
+    padding: 20px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+
+    & + & {
+      margin-top: 16px;
+    }
+
+    h2 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    h2 + p {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      margin: -12px 0 14px;
+      line-height: 1.45;
+    }
+  }
+
+  .field {
+    & + .field {
+      margin-top: 14px;
+    }
+  }
+
+  .field-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .field-label {
+      margin-bottom: 0;
+      min-width: 80px;
+    }
   }
 
   .field-label {
-    font-size: 14px;
-    color: var(--color-text);
-    white-space: nowrap;
-    min-width: 110px;
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
   }
 
   .field-input {
-    flex: 1;
-    padding: 6px 10px;
-    max-width: 320px;
+    width: 100%;
+    padding: 9px 12px;
+    font-size: 14px;
   }
 
   .field-input-narrow {
-    max-width: 80px;
-    flex: 0;
+    width: auto;
+    max-width: 110px;
+    padding: 7px 10px;
   }
 
-  .field-path {
-    flex: 1;
-    padding: 6px 10px;
-    max-width: 480px;
+  .path-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
     font-size: 13px;
-    color: var(--color-text-muted);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 3px;
-    direction: rtl;
-    text-align: left;
-  }
-
-  .field-hint {
-    font-size: 12px;
-    color: var(--color-text-muted);
-    margin-top: 8px;
-    line-height: 1.4;
   }
 
   .check-row {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 10px 0;
     cursor: pointer;
     user-select: none;
 
@@ -305,23 +356,18 @@
       flex-shrink: 0;
       margin-top: 1px;
     }
-  }
 
-  .check-text {
-    display: block;
-  }
+    > span {
+      font-size: 14px;
+      color: var(--color-text);
+    }
 
-  .check-label {
-    display: block;
-    font-size: 14px;
-    color: var(--color-text);
-  }
-
-  .check-hint {
-    display: block;
-    font-size: 12px;
-    color: var(--color-text-muted);
-    margin-top: 4px;
-    line-height: 1.4;
+    small {
+      display: block;
+      font-size: 12px;
+      color: var(--color-text-muted);
+      margin-top: 4px;
+      line-height: 1.45;
+    }
   }
 </style>

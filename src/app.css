@@ -39,6 +39,10 @@
   --color-scrollbar-thumb: #4a4a6a;
   --shadow-dropdown: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-dialog: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 * {
@@ -73,7 +77,7 @@ body {
 button {
   padding: 6px 14px;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: var(--color-input-bg);
   color: var(--color-text);
   cursor: pointer;
@@ -96,7 +100,7 @@ textarea {
   background: var(--color-input-bg);
   color: var(--color-text);
   border: 1px solid var(--color-border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   padding: 4px 6px;
   font-family: inherit;
   font-size: inherit;
@@ -111,26 +115,9 @@ textarea {
   }
 }
 
-::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--color-surface);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-scrollbar-thumb);
-  border-radius: 6px;
-
-  &:hover {
-    background: var(--color-text-muted);
-  }
-}
-
-::-webkit-scrollbar-corner {
-  background: var(--color-bg);
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scrollbar-thumb) var(--color-surface);
 }
 
 .btn-primary {
@@ -174,4 +161,14 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.error {
+  margin: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--color-error-text);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--radius-md);
 }

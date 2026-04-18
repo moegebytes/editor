@@ -83,10 +83,10 @@
 
   let toolsItems: MenuEntry[] = $derived([
     { label: 'Go to Line', action: onGoToLine, shortcut: 'Ctrl+G' },
-    { label: 'Open Dictionary', action: onOpenDict, shortcut: 'Ctrl+D' },
     { label: 'Find & Replace', action: onToggleFindReplace, shortcut: 'Ctrl+H' },
     { separator: true },
-    { label: 'Glossary', action: onOpenGlossary },
+    { label: 'Dictionary', action: onOpenDict, shortcut: 'Ctrl+D' },
+    { label: 'Glossary', action: onOpenGlossary, shortcut: 'Ctrl+U' },
   ]);
 
   let helpItems: MenuEntry[] = $derived([{ label: 'About', action: onAbout }]);

@@ -82,7 +82,7 @@
   .dialog-inner {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     padding: 20px;
     min-width: 320px;
     max-width: 520px;

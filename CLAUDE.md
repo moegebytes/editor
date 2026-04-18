@@ -43,30 +43,40 @@ editor/
 │   │   ├── utils.ts                 -- Shared utilities (entry predicates, set helpers, kanji detection)
 │   │   ├── segment.ts               -- Generic text splitter for match highlighting
 │   │   ├── debounce.svelte.ts       -- useDebouncedValue rune helper
+│   │   ├── search.svelte.ts         -- Find-in-entries search state (match computation, navigation)
 │   │   ├── toast.svelte.ts          -- Toast notification store (Svelte 5 runes module)
 │   │   └── undo.svelte.ts           -- Undo/redo stack (command pattern)
 │   └── components/
+│       ├── dictionary/
+│       │   ├── JmdictTab.svelte
+│       │   ├── KanjiDetail.svelte
+│       │   ├── KanjiText.svelte
+│       │   └── WiktTab.svelte
+│       ├── glossary/
+│       │   ├── EntryDetail.svelte
+│       │   ├── GlossaryList.svelte
+│       │   └── GlossaryToolbar.svelte
 │       ├── ui/
+│       │   ├── AskDialog.svelte
 │       │   ├── ContextMenu.svelte
+│       │   ├── CopyButton.svelte
 │       │   ├── Dialog.svelte
 │       │   ├── DropdownMenu.svelte
-│       │   ├── KanjiText.svelte
 │       │   ├── LoadingOverlay.svelte
-│       │   └── ToastContainer.svelte
+│       │   ├── PathText.svelte
+│       │   ├── ToastContainer.svelte
+│       │   └── ViewHeader.svelte
 │       ├── AboutDialog.svelte
-│       ├── JmdictTab.svelte
 │       ├── DictionaryPanel.svelte
-│       ├── KanjiDetail.svelte
 │       ├── EditorTable.svelte
 │       ├── FindReplaceBar.svelte
-│       ├── GlossaryPanel.svelte
+│       ├── GlossaryView.svelte
 │       ├── GoToLineDialog.svelte
 │       ├── ProjectHome.svelte
 │       ├── RecoveryDialog.svelte
 │       ├── SettingsView.svelte
 │       ├── StatusBar.svelte
 │       ├── Toolbar.svelte
-│       ├── WiktTab.svelte
 │       └── UnsavedChangesDialog.svelte
 ├── src-tauri/                       -- Tauri 2 backend
 │   ├── Cargo.toml

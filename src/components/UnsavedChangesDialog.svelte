@@ -1,7 +1,7 @@
 <script lang="ts">
   import { TriangleAlertIcon } from '@lucide/svelte';
 
-  import Dialog from './ui/Dialog.svelte';
+  import AskDialog from './ui/AskDialog.svelte';
 
   let {
     visible = $bindable(false),
@@ -14,11 +14,14 @@
   } = $props();
 </script>
 
-<Dialog bind:visible title="Unsaved Changes">
-  <div class="message">
-    <TriangleAlertIcon size={24} class="warning-icon" />
+<AskDialog bind:visible title="Unsaved Changes">
+  {#snippet icon()}
+    <TriangleAlertIcon size={24} color="var(--color-warning)" />
+  {/snippet}
+
+  {#snippet message()}
     <p>You have unsaved changes. Would you like to save before continuing?</p>
-  </div>
+  {/snippet}
 
   {#snippet actions()}
     <button onclick={() => (visible = false)}>Cancel</button>
@@ -37,23 +40,4 @@
       }}>Save</button
     >
   {/snippet}
-</Dialog>
-
-<style>
-  .message {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    font-size: 14px;
-    color: var(--color-text);
-
-    p {
-      margin: 0;
-    }
-  }
-
-  :global(.warning-icon) {
-    color: var(--color-warning);
-    flex-shrink: 0;
-  }
-</style>
+</AskDialog>

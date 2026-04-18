@@ -40,7 +40,9 @@
       {
         "title": "Yona",
         "width": 1200,
+        "minWidth": 1280,
         "height": 800,
+        "minHeight": 800,
         "visible": false
       }
     ],

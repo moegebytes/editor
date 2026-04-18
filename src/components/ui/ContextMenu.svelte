@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { isEditable } from '../../lib/utils';
+
   import DropdownMenu from './DropdownMenu.svelte';
   import type { MenuEntry } from './DropdownMenu.svelte';
 
@@ -7,10 +9,6 @@
   let y = $state(0);
   let items: MenuEntry[] = $state([]);
   let menuEl: HTMLDivElement | undefined = $state();
-
-  function isEditable(el: EventTarget | null): el is HTMLInputElement | HTMLTextAreaElement {
-    return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
-  }
 
   function hasSelection(el: HTMLInputElement | HTMLTextAreaElement): boolean {
     return (el.selectionStart ?? 0) !== (el.selectionEnd ?? 0);

@@ -55,7 +55,7 @@
   .dropdown-menu {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 4px;
+    border-radius: var(--radius-md);
     box-shadow: var(--shadow-dropdown);
     padding: 4px 0;
     min-width: 140px;

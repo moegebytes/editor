@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { DictEntry, Inflection } from '../lib/types';
-  import { lookupJmdict } from '../lib/ipc';
+  import type { DictEntry, Inflection } from '../../lib/types';
+  import { lookupJmdict } from '../../lib/ipc';
 
   import KanjiDetail from './KanjiDetail.svelte';
-  import KanjiText from './ui/KanjiText.svelte';
+  import KanjiText from './KanjiText.svelte';
 
   let {
     onNavigate,
@@ -190,23 +190,13 @@
     text-align: center;
   }
 
-  .error {
-    margin: 8px;
-    padding: 8px 10px;
-    font-size: 13px;
-    color: var(--color-error-text);
-    background: var(--color-error-bg);
-    border: 1px solid var(--color-error-border);
-    border-radius: 4px;
-  }
-
   .inflection-hint {
     margin: 8px;
     padding: 8px 10px;
     background: var(--color-surface-alt);
     border: 1px solid var(--color-border);
     border-left: 3px solid var(--color-accent);
-    border-radius: 4px;
+    border-radius: var(--radius-md);
     font-size: 13px;
     line-height: 1.5;
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getVersion } from '@tauri-apps/api/app';
-  import { XIcon, Trash2Icon, TriangleAlertIcon, SettingsIcon, FolderOpenIcon } from '@lucide/svelte';
+  import { XIcon, Trash2Icon, TriangleAlertIcon, SettingsIcon, FolderOpenIcon, FileIcon } from '@lucide/svelte';
 
   import type { RecentProject } from '../lib/types';
   import { openFileDialog, importProjectDialog } from '../lib/dialogs';
@@ -18,6 +18,7 @@
 
   import Dialog from './ui/Dialog.svelte';
   import LoadingOverlay from './ui/LoadingOverlay.svelte';
+  import PathText from './ui/PathText.svelte';
 
   let {
     onNewProject,
@@ -266,18 +267,16 @@
         <div class="form-field">
           <label for="jp-file-browse">Japanese File</label>
           <div class="file-pick">
-            <span class="file-path text-ellipsis" title={newJpPath}>
-              {newJpPath || 'No file selected'}
-            </span>
+            <FileIcon size={14} />
+            <PathText path={newJpPath} placeholder="No file selected" />
             <button id="jp-file-browse" onclick={handlePickJp}>Browse</button>
           </div>
         </div>
         <div class="form-field">
           <label for="en-file-browse">English File</label>
           <div class="file-pick">
-            <span class="file-path text-ellipsis" title={newEnPath}>
-              {newEnPath || 'No file selected'}
-            </span>
+            <FileIcon size={14} />
+            <PathText path={newEnPath} placeholder="No file selected" />
             <button id="en-file-browse" onclick={handlePickEn}>Browse</button>
           </div>
         </div>
@@ -446,7 +445,7 @@
   .import-btn {
     padding: 32px 48px;
     font-size: 22px;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
   }
 
   .new-form {
@@ -454,7 +453,7 @@
     max-width: 640px;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     padding: 24px;
 
     h2 {
@@ -484,18 +483,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  .file-path {
-    flex: 1;
     padding: 8px 10px;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 3px;
-    font-size: 13px;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
     color: var(--color-text-muted);
-    direction: rtl;
-    text-align: left;
   }
 
   .form-error {

@@ -12,8 +12,9 @@
     RecoveryEntry,
   } from './lib/types';
   import { type Command, UndoStack } from './lib/undo.svelte';
-  import { useDebouncedValue } from './lib/debounce.svelte.js';
+  import { useDebouncedValue } from './lib/debounce.svelte';
   import { exportProjectDialog } from './lib/dialogs';
+  import { SearchState } from './lib/search.svelte';
   import { isText, isTranslated, isUntranslated, modKey } from './lib/utils';
   import { toast } from './lib/toast.svelte';
   import {
@@ -40,7 +41,7 @@
   import ContextMenu from './components/ui/ContextMenu.svelte';
   import DictionaryPanel from './components/DictionaryPanel.svelte';
   import EditorTable from './components/EditorTable.svelte';
-  import GlossaryPanel from './components/GlossaryPanel.svelte';
+  import GlossaryView from './components/GlossaryView.svelte';
   import FindReplaceBar from './components/FindReplaceBar.svelte';
   import GoToLineDialog from './components/GoToLineDialog.svelte';
   import ProjectHome from './components/ProjectHome.svelte';
@@ -83,10 +84,10 @@
   let filterText = $state('');
   const debouncedFilter = useDebouncedValue(() => filterText, 150);
   let findReplaceVisible = $state(false);
-  let findQuery = $state('');
-  let findCaseSensitive = $state(false);
-  let findMatchIndices: number[] = $state([]);
-  let currentFindMatch = $state(-1);
+  const search = new SearchState(
+    () => entries,
+    () => debouncedFilter.value,
+  );
   let toolbarRef: Toolbar = $state() as Toolbar;
 
   // Unsaved changes dialog
@@ -133,8 +134,8 @@
 
   $effect(() => {
     void debouncedFilter.value;
-    void findCaseSensitive;
-    if (findQuery) computeFindMatches(findQuery);
+    void search.caseSensitive;
+    if (search.query) search.compute(search.query);
   });
 
   function buildRecoveryEntries(): Record<string, RecoveryEntry> {
@@ -275,7 +276,6 @@
       projectName = name;
       projectSettings = settings;
       appSettings = newAppSettings;
-      toast.success('Settings saved');
     } catch (e) {
       toast.error(`Failed to save settings: ${e}`);
     }
@@ -285,7 +285,6 @@
     try {
       await updateGlossary(newGlossary);
       glossary = newGlossary;
-      toast.success('Glossary saved');
     } catch (e) {
       toast.error(`Failed to save glossary: ${e}`);
     }
@@ -337,10 +336,7 @@
     selectedIndex = -1;
     filterText = '';
     findReplaceVisible = false;
-    findQuery = '';
-    findCaseSensitive = false;
-    findMatchIndices = [];
-    currentFindMatch = -1;
+    search.reset();
   }
 
   function handleCloseProject() {
@@ -444,71 +440,41 @@
     dictVisible = true;
   }
 
-  function computeFindMatches(query: string) {
-    findQuery = query;
-    if (!query) {
-      findMatchIndices = [];
-      currentFindMatch = -1;
-      return;
-    }
-    const needle = findCaseSensitive ? query : query.toLowerCase();
-    const fLower = debouncedFilter.value.toLowerCase();
-    const matches: number[] = [];
-    for (const entry of entries) {
-      if (!isText(entry)) continue;
-      const enText = entry.enText ?? '';
-      const enLower = findCaseSensitive && !fLower ? '' : enText.toLowerCase();
-      if (fLower) {
-        const jpLower = (entry.jpText ?? '').toLowerCase();
-        if (!jpLower.includes(fLower) && !enLower.includes(fLower)) continue;
-      }
-      const haystack = findCaseSensitive ? enText : enLower;
-      if (haystack.includes(needle)) matches.push(entry.index);
-    }
-    findMatchIndices = matches;
-    currentFindMatch = matches.length > 0 ? 0 : -1;
-  }
-
   function findNext() {
-    if (findMatchIndices.length === 0) return;
-    currentFindMatch = (currentFindMatch + 1) % findMatchIndices.length;
-    selectedIndex = findMatchIndices[currentFindMatch];
+    const idx = search.next();
+    if (idx !== undefined) selectedIndex = idx;
   }
 
   function findPrev() {
-    if (findMatchIndices.length === 0) return;
-    currentFindMatch = (currentFindMatch - 1 + findMatchIndices.length) % findMatchIndices.length;
-    selectedIndex = findMatchIndices[currentFindMatch];
-  }
-
-  function normalize(s: string): string {
-    return findCaseSensitive ? s : s.toLowerCase();
+    const idx = search.prev();
+    if (idx !== undefined) selectedIndex = idx;
   }
 
   function replaceCurrent(replacement: string) {
-    if (currentFindMatch < 0 || !findQuery) return;
-    const idx = findMatchIndices[currentFindMatch];
+    if (search.currentMatch < 0 || !search.query) return;
+    const idx = search.matchIndices[search.currentMatch];
     const entry = entries[idx];
     if (!entry.enText) return;
-    const pos = normalize(entry.enText).indexOf(normalize(findQuery));
+    const pos = search.normalize(entry.enText).indexOf(search.normalize(search.query));
     if (pos < 0) return;
     const oldText = entry.enText;
-    entries[idx].enText = entry.enText.substring(0, pos) + replacement + entry.enText.substring(pos + findQuery.length);
+    entries[idx].enText =
+      entry.enText.substring(0, pos) + replacement + entry.enText.substring(pos + search.query.length);
     undoStack.push({ kind: 'editText', index: idx, oldText, newText: entries[idx].enText });
     incrementDirty(idx);
     modified = true;
-    computeFindMatches(findQuery);
+    search.compute(search.query);
   }
 
   function replaceAll(query: string, replacement: string) {
     if (!query) return;
-    const needle = normalize(query);
-    const matchSet = new Set(findMatchIndices);
+    const needle = search.normalize(query);
+    const matchSet = new Set(search.matchIndices);
     const commands: Command[] = [];
     for (const entry of entries) {
       if (!matchSet.has(entry.index) || !entry.enText) continue;
       const en = entry.enText;
-      const haystack = normalize(en);
+      const haystack = search.normalize(en);
       let result = '';
       let i = 0;
       while (i < en.length) {
@@ -530,7 +496,7 @@
       undoStack.push(commands.length === 1 ? commands[0] : commands);
       modified = true;
     }
-    computeFindMatches(query);
+    search.compute(query);
   }
 
   async function applyEntry(commands: Command[], reverse: boolean) {
@@ -603,7 +569,10 @@
         findReplaceVisible = !findReplaceVisible;
         break;
       case 'd':
-        dictVisible = !dictVisible;
+        dictVisible = true;
+        break;
+      case 'u':
+        glossaryVisible = true;
         break;
       case 'g':
         goToLineVisible = true;
@@ -636,7 +605,7 @@
       {loading}
     />
   {:else if glossaryVisible}
-    <GlossaryPanel {glossary} onBack={() => (glossaryVisible = false)} onSave={handleSaveGlossary} />
+    <GlossaryView {glossary} onBack={() => (glossaryVisible = false)} onSave={handleSaveGlossary} />
   {:else if settingsVisible}
     <SettingsView
       projectName={projectName ?? ''}
@@ -689,23 +658,23 @@
           onJpSelect={handleJpSelect}
           {glossary}
           filterText={debouncedFilter.value}
-          {findQuery}
-          {findMatchIndices}
-          {currentFindMatch}
+          findQuery={search.query}
+          findMatchIndices={search.matchIndices}
+          currentFindMatch={search.currentMatch}
         />
       </div>
     </div>
 
     <FindReplaceBar
       bind:visible={findReplaceVisible}
-      bind:caseSensitive={findCaseSensitive}
-      onFind={computeFindMatches}
+      bind:caseSensitive={search.caseSensitive}
+      onFind={(q) => search.compute(q)}
       onFindNext={findNext}
       onFindPrev={findPrev}
       onReplace={replaceCurrent}
       onReplaceAll={replaceAll}
-      matchCount={findMatchIndices.length}
-      currentMatch={currentFindMatch}
+      matchCount={search.matchIndices.length}
+      currentMatch={search.currentMatch}
     />
 
     <StatusBar {modified} {saving} {stats} />

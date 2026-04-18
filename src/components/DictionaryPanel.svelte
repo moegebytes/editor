@@ -1,8 +1,8 @@
 <script lang="ts">
   import { XIcon, SearchIcon, ArrowLeftIcon, ArrowRightIcon } from '@lucide/svelte';
 
-  import JmdictTab from './JmdictTab.svelte';
-  import WiktTab from './WiktTab.svelte';
+  import JmdictTab from './dictionary/JmdictTab.svelte';
+  import WiktTab from './dictionary/WiktTab.svelte';
 
   const MIN_WIDTH = 360;
   const MAX_WIDTH = 600;

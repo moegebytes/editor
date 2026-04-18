@@ -639,7 +639,7 @@
       border: 1px solid transparent;
       background: transparent;
       padding: 2px 4px;
-      border-radius: 3px;
+      border-radius: var(--radius-sm);
       color: var(--color-text);
       font-family: inherit;
       font-size: inherit;
@@ -751,7 +751,7 @@
       background: var(--color-bg);
       color: var(--color-text);
       border: 1px solid var(--color-border);
-      border-radius: 3px;
+      border-radius: var(--radius-sm);
       padding: 6px 8px;
       font-family: inherit;
       font-size: 13px;

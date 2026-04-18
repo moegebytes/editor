@@ -84,7 +84,7 @@
         width: 120px;
         height: 6px;
         background: var(--color-border);
-        border-radius: 3px;
+        border-radius: var(--radius-sm);
         overflow: hidden;
         position: relative;
 
@@ -94,7 +94,7 @@
           left: 0;
           height: 100%;
           background: var(--color-translated-progress);
-          border-radius: 3px;
+          border-radius: var(--radius-sm);
         }
 
         .progress-confirmed {
@@ -103,7 +103,7 @@
           left: 0;
           height: 100%;
           background: var(--color-accent);
-          border-radius: 3px;
+          border-radius: var(--radius-sm);
           z-index: 1;
         }
       }

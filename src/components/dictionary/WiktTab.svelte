@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { WiktResult, WiktRelation } from '../lib/types';
-  import { lookupWiktionary } from '../lib/ipc';
+  import type { WiktResult, WiktRelation } from '../../lib/types';
+  import { lookupWiktionary } from '../../lib/ipc';
 
   import KanjiDetail from './KanjiDetail.svelte';
-  import KanjiText from './ui/KanjiText.svelte';
+  import KanjiText from './KanjiText.svelte';
 
   let {
     onNavigate,
@@ -180,16 +180,6 @@
     color: var(--color-text-muted);
     font-size: 13px;
     text-align: center;
-  }
-
-  .error {
-    margin: 8px;
-    padding: 8px 10px;
-    font-size: 13px;
-    color: var(--color-error-text);
-    background: var(--color-error-bg);
-    border: 1px solid var(--color-error-border);
-    border-radius: 4px;
   }
 
   .wikt-results {

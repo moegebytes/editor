@@ -18,6 +18,14 @@ export function getFileName(path: string): string {
   return path.replace(/^.*[/\\]/, '');
 }
 
+export function isEditable(el: EventTarget | null): el is HTMLInputElement | HTMLTextAreaElement {
+  if (el instanceof HTMLTextAreaElement) return true;
+  if (el instanceof HTMLInputElement) {
+    return ['text', 'search', 'tel', 'url', 'email', 'password', 'number'].includes(el.type);
+  }
+  return false;
+}
+
 export function modKey(e: KeyboardEvent): boolean {
   return platform() === 'macos' ? e.metaKey : e.ctrlKey;
 }

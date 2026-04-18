@@ -1,8 +1,8 @@
 <script lang="ts">
   import { XIcon } from '@lucide/svelte';
 
-  import type { KanjiEntry } from '../lib/types';
-  import { lookupKanji } from '../lib/ipc';
+  import type { KanjiEntry } from '../../lib/types';
+  import { lookupKanji } from '../../lib/ipc';
 
   let kanjiDetail: KanjiEntry | null = $state(null);
   let error: string | null = $state(null);
@@ -63,16 +63,6 @@
 {/if}
 
 <style>
-  .error {
-    margin: 8px;
-    padding: 8px 10px;
-    font-size: 13px;
-    color: var(--color-error-text);
-    background: var(--color-error-bg);
-    border: 1px solid var(--color-error-border);
-    border-radius: 4px;
-  }
-
   .kanji-detail {
     border-top: 2px solid var(--color-accent);
     padding: 12px;

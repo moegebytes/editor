@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ALargeSmallIcon, ChevronUpIcon, ChevronDownIcon, XIcon } from '@lucide/svelte';
 
-  import { useDebouncedValue } from '../lib/debounce.svelte.js';
+  import { useDebouncedValue } from '../lib/debounce.svelte';
 
   let {
     visible = $bindable(false),
@@ -154,7 +154,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     color: var(--color-text-muted);
 
     &:hover {

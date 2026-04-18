@@ -1,7 +1,7 @@
 <script lang="ts">
   import { HistoryIcon } from '@lucide/svelte';
 
-  import Dialog from './ui/Dialog.svelte';
+  import AskDialog from './ui/AskDialog.svelte';
 
   let {
     visible = $bindable(false),
@@ -35,16 +35,17 @@
   });
 </script>
 
-<Dialog bind:visible title="Recovery Data Found">
-  <div class="message">
-    <HistoryIcon size={24} class="recovery-icon" />
-    <div>
-      <p>Unsaved changes from <strong>{formattedTime}</strong> were recovered. Would you like to restore them?</p>
-      {#if summary}
-        <p class="summary">{summary}</p>
-      {/if}
-    </div>
-  </div>
+<AskDialog bind:visible title="Recovery Data Found">
+  {#snippet icon()}
+    <HistoryIcon size={24} color="var(--color-accent)" />
+  {/snippet}
+
+  {#snippet message()}
+    <p>Unsaved changes from <strong>{formattedTime}</strong> were recovered. Would you like to restore them?</p>
+    {#if summary}
+      <p class="summary">{summary}</p>
+    {/if}
+  {/snippet}
 
   {#snippet actions()}
     <button
@@ -62,29 +63,12 @@
       }}>Restore</button
     >
   {/snippet}
-</Dialog>
+</AskDialog>
 
 <style>
-  .message {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    font-size: 14px;
-    color: var(--color-text);
-
-    p {
-      margin: 0;
-    }
-  }
-
   .summary {
     padding-top: 10px;
     font-size: 13px;
     color: var(--color-text-muted);
-  }
-
-  :global(.recovery-icon) {
-    color: var(--color-accent);
-    flex-shrink: 0;
   }
 </style>
